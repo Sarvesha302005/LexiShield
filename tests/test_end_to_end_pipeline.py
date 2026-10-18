@@ -5,12 +5,11 @@ idempotency, and PDF generation.
 """
 
 import json
-import os
+
 import pytest
 from httpx import AsyncClient
 
 from src.models.schemas import PipelineExecutionStatus
-from src.workflows.dispute_pipeline import get_dispute_pipeline
 
 
 @pytest.mark.asyncio
@@ -259,7 +258,11 @@ async def test_e2e_hitl_override_additional_actions(
     # 1. Override with CONCEDE
     concede_resp = await async_client.post(
         "/api/v1/disputes/PP-D-HITL-MULTI-99/hitl/override",
-        json={"reviewer_id": "REVIEWER_A", "action": "CONCEDE", "override_reason": "Conceding upon buyer request"},
+        json={
+            "reviewer_id": "REVIEWER_A",
+            "action": "CONCEDE",
+            "override_reason": "Conceding upon buyer request",
+        },
     )
     assert concede_resp.status_code == 200
     assert concede_resp.json()["pipeline_status"] == PipelineExecutionStatus.CONCEDED.value
@@ -267,7 +270,11 @@ async def test_e2e_hitl_override_additional_actions(
     # 2. Override with SEND_MESSAGE
     msg_resp = await async_client.post(
         "/api/v1/disputes/PP-D-HITL-MULTI-99/hitl/override",
-        json={"reviewer_id": "REVIEWER_B", "action": "SEND_MESSAGE", "override_reason": "Sending inquiry follow-up"},
+        json={
+            "reviewer_id": "REVIEWER_B",
+            "action": "SEND_MESSAGE",
+            "override_reason": "Sending inquiry follow-up",
+        },
     )
     assert msg_resp.status_code == 200
     assert msg_resp.json()["pipeline_status"] == PipelineExecutionStatus.DE_ESCALATED.value
@@ -275,7 +282,12 @@ async def test_e2e_hitl_override_additional_actions(
     # 3. Override with MAKE_OFFER
     offer_resp = await async_client.post(
         "/api/v1/disputes/PP-D-HITL-MULTI-99/hitl/override",
-        json={"reviewer_id": "REVIEWER_C", "action": "MAKE_OFFER", "override_reason": "Offering courtesy discount", "adjusted_offer_amount": 100.0},
+        json={
+            "reviewer_id": "REVIEWER_C",
+            "action": "MAKE_OFFER",
+            "override_reason": "Offering courtesy discount",
+            "adjusted_offer_amount": 100.0,
+        },
     )
     assert offer_resp.status_code == 200
     assert offer_resp.json()["pipeline_status"] == PipelineExecutionStatus.DE_ESCALATED.value
@@ -298,4 +310,3 @@ async def test_e2e_dispute_filters_and_health_check(async_client: AsyncClient):
     # Root
     root_resp = await async_client.get("/")
     assert root_resp.status_code == 200
-

@@ -6,14 +6,19 @@ Compiles order details, carrier telemetry, warehouse confirmation, and structure
 import io
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    HRFlowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from src.core.exceptions import PDFGenerationError
 from src.models.arbitration import ArbitrationDecision
@@ -30,7 +35,7 @@ logger = logging.getLogger(__name__)
 class PDFGenerator:
     """Enterprise evidentiary dispute dossier generator."""
 
-    def __init__(self, output_dir: Optional[str] = None) -> None:
+    def __init__(self, output_dir: str | None = None) -> None:
         self.output_dir = output_dir or os.path.join(os.getcwd(), "artifacts", "dossiers")
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -41,7 +46,7 @@ class PDFGenerator:
         carrier: CarrierTrackingInfo,
         warehouse: WarehouseFulfillmentInfo,
         order: OrderCustomerInfo,
-        file_path: Optional[str] = None,
+        file_path: str | None = None,
     ) -> bytes:
         """
         Generate a professional evidentiary PDF rebuttal dossier.
@@ -106,14 +111,6 @@ class PDFGenerator:
                 spaceBefore=6,
                 spaceAfter=10,
             )
-            table_header_style = ParagraphStyle(
-                "TableHeader",
-                parent=styles["Normal"],
-                fontSize=8.5,
-                leading=11,
-                fontName="Helvetica-Bold",
-                textColor=colors.white,
-            )
             table_cell_style = ParagraphStyle(
                 "TableCell",
                 parent=styles["Normal"],
@@ -129,7 +126,7 @@ class PDFGenerator:
             story.append(
                 Paragraph(
                     f"Official Case Submission for PayPal Dispute ID: <b>{dispute.dispute_id}</b> | "
-                    f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+                    f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
                     subtitle_style,
                 )
             )
@@ -149,7 +146,10 @@ class PDFGenerator:
                     Paragraph("<b>Dispute ID</b>", table_cell_style),
                     Paragraph(dispute.dispute_id, table_cell_style),
                     Paragraph("<b>Disputed Amount</b>", table_cell_style),
-                    Paragraph(f"${dispute.dispute_amount.value} {dispute.dispute_amount.currency_code}", table_cell_style),
+                    Paragraph(
+                        f"${dispute.dispute_amount.value} {dispute.dispute_amount.currency_code}",
+                        table_cell_style,
+                    ),
                 ],
                 [
                     Paragraph("<b>Dispute Stage</b>", table_cell_style),
@@ -223,7 +223,12 @@ class PDFGenerator:
             t_carrier.setStyle(
                 TableStyle(
                     [
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F0FDF4")),  # light green tint
+                        (
+                            "BACKGROUND",
+                            (0, 0),
+                            (-1, -1),
+                            colors.HexColor("#F0FDF4"),
+                        ),  # light green tint
                         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#86EFAC")),
                         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#BBF7D0")),
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -236,7 +241,9 @@ class PDFGenerator:
             story.append(Spacer(1, 10))
 
             # 4. Outbound Warehouse Quality & Telemetry
-            story.append(Paragraph("3. Outbound Warehouse & Packing Station Verification", h2_style))
+            story.append(
+                Paragraph("3. Outbound Warehouse & Packing Station Verification", h2_style)
+            )
             wh_data = [
                 [
                     Paragraph("<b>Warehouse Facility</b>", table_cell_style),
@@ -248,7 +255,10 @@ class PDFGenerator:
                     Paragraph("<b>Scale Measured Weight</b>", table_cell_style),
                     Paragraph(f"{warehouse.scale_measured_weight_kg:.3f} kg", table_cell_style),
                     Paragraph("<b>Catalog Expected Weight</b>", table_cell_style),
-                    Paragraph(f"{warehouse.expected_weight_kg:.3f} kg (Variance: {warehouse.weight_delta_percent}%)", table_cell_style),
+                    Paragraph(
+                        f"{warehouse.expected_weight_kg:.3f} kg (Variance: {warehouse.weight_delta_percent}%)",
+                        table_cell_style,
+                    ),
                 ],
                 [
                     Paragraph("<b>Scanned Serial(s)</b>", table_cell_style),
@@ -260,7 +270,10 @@ class PDFGenerator:
                     Paragraph("<b>Pack Station Photo</b>", table_cell_style),
                     Paragraph("Digital QA Archive Logged", table_cell_style),
                     Paragraph("<b>QA Inspection Passed</b>", table_cell_style),
-                    Paragraph("VERIFIED & PASSED" if warehouse.quality_inspection_passed else "FLAGGED", table_cell_style),
+                    Paragraph(
+                        "VERIFIED & PASSED" if warehouse.quality_inspection_passed else "FLAGGED",
+                        table_cell_style,
+                    ),
                 ],
             ]
             t_wh = Table(wh_data, colWidths=[110, 155, 110, 155])
@@ -299,11 +312,15 @@ class PDFGenerator:
             buffer.close()
 
             # Optionally write to file
-            target_path = file_path or os.path.join(self.output_dir, f"dispute_{dispute.dispute_id}_evidence.pdf")
+            target_path = file_path or os.path.join(
+                self.output_dir, f"dispute_{dispute.dispute_id}_evidence.pdf"
+            )
             with open(target_path, "wb") as f:
                 f.write(pdf_bytes)
 
-            logger.info(f"Evidentiary PDF successfully generated for {dispute.dispute_id} at {target_path}.")
+            logger.info(
+                f"Evidentiary PDF successfully generated for {dispute.dispute_id} at {target_path}."
+            )
             return pdf_bytes
 
         except Exception as exc:

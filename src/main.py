@@ -7,8 +7,8 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,7 +87,11 @@ async def correlation_id_middleware(request: Request, call_next):
 async def webhook_verification_exception_handler(request: Request, exc: WebhookVerificationError):
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"error": "WebhookVerificationError", "message": exc.message, "details": exc.details},
+        content={
+            "error": "WebhookVerificationError",
+            "message": exc.message,
+            "details": exc.details,
+        },
     )
 
 

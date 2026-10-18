@@ -3,13 +3,14 @@ Pydantic Schemas for AI Arbitration, Win Probability, and Decision Reasoning.
 These structured models are populated by Google Gemini 1.5 via Instructor.
 """
 
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
+
 from pydantic import BaseModel, Field
 
 
-class ArbitrationAction(str, Enum):
+class ArbitrationAction(StrEnum):
     """Action recommended by the arbitration engine."""
+
     SEND_MESSAGE = "SEND_MESSAGE"
     MAKE_OFFER = "MAKE_OFFER"
     PROVIDE_EVIDENCE = "PROVIDE_EVIDENCE"
@@ -23,6 +24,7 @@ class ArbitrationDecision(BaseModel):
     Outputs computed win probability P(win), expected value E[V],
     and formal evidence dossier citations.
     """
+
     dispute_id: str = Field(..., description="Target PayPal dispute ID")
     win_probability: float = Field(
         ...,
@@ -64,11 +66,11 @@ class ArbitrationDecision(BaseModel):
         ...,
         description="Formal, persuasive evidentiary rebuttal statement citing PayPal Seller Protection",
     )
-    customer_message: Optional[str] = Field(
+    customer_message: str | None = Field(
         default=None,
         description="Proposed message for customer de-escalation in INQUIRY stage",
     )
-    offer_amount: Optional[float] = Field(
+    offer_amount: float | None = Field(
         default=None,
         description="Proposed refund/settlement offer amount for INQUIRY stage",
     )

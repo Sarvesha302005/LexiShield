@@ -4,7 +4,6 @@ Provides evidentiary proof of package contents before carrier handoff.
 """
 
 import logging
-from typing import Optional
 
 from src.core.exceptions import WarehouseTelemetryError
 from src.models.schemas import WarehouseFulfillmentInfo

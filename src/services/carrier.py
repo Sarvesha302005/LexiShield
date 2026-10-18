@@ -4,8 +4,6 @@ Fetches real-time carrier tracking status, delivery timestamps, signature proof,
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
 from src.core.exceptions import CarrierTelemetryError
 from src.models.schemas import CarrierTrackingInfo, TrackingEvent
@@ -30,8 +28,8 @@ class CarrierService:
 
     async def get_tracking(
         self,
-        tracking_number: Optional[str] = None,
-        order_id: Optional[str] = None,
+        tracking_number: str | None = None,
+        order_id: str | None = None,
     ) -> CarrierTrackingInfo:
         """
         Fetch carrier telemetry by tracking number or order ID.

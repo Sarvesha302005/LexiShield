@@ -3,7 +3,9 @@ Unit tests for PayPal Webhook Security and Signature Validation.
 """
 
 import json
+
 import pytest
+
 from src.core.exceptions import (
     InvalidCertificateUrlError,
     InvalidSignatureError,
@@ -73,7 +75,9 @@ async def test_verify_tampered_payload_rejected(sign_webhook_payload):
     headers = sign_webhook_payload(original_payload)
 
     # Tampered body
-    tampered_payload = json.dumps({"event": "CUSTOMER.DISPUTE.CREATED", "tampered": True}).encode("utf-8")
+    tampered_payload = json.dumps({"event": "CUSTOMER.DISPUTE.CREATED", "tampered": True}).encode(
+        "utf-8"
+    )
 
     with pytest.raises(InvalidSignatureError, match="signature verification failed"):
         await verify_paypal_webhook_signature(

@@ -7,7 +7,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.core.exceptions import InvalidSignatureError, WebhookVerificationError
 from src.core.security import verify_paypal_webhook_signature
@@ -45,7 +45,7 @@ async def handle_paypal_webhook(
         logger.warning(f"[{correlation_id}] Webhook signature verification rejected: {exc}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Webhook verification failure: {str(exc)}",
+            detail=f"Webhook verification failure: {exc!s}",
         ) from exc
     except Exception as exc:
         logger.error(f"[{correlation_id}] Unexpected error during webhook verification: {exc}")
@@ -61,7 +61,7 @@ async def handle_paypal_webhook(
         logger.error(f"[{correlation_id}] Failed parsing PayPal webhook JSON: {exc}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid PayPal webhook schema: {str(exc)}",
+            detail=f"Invalid PayPal webhook schema: {exc!s}",
         ) from exc
 
     logger.info(f"[{correlation_id}] Webhook verified for event {event.id} ({event.event_type}).")
@@ -76,7 +76,7 @@ async def handle_paypal_webhook(
         logger.error(f"[{correlation_id}] Pipeline error processing event {event.id}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Pipeline execution error: {str(exc)}",
+            detail=f"Pipeline execution error: {exc!s}",
         ) from exc
 
     return {

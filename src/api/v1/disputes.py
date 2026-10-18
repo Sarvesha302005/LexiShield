@@ -4,9 +4,8 @@ Provides endpoints to monitor dispute lifecycles, inspect evidence, download PDF
 """
 
 import os
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
 from src.core.exceptions import DisputeNotFoundError
@@ -27,8 +26,10 @@ router = APIRouter(prefix="/disputes", tags=["Dispute Operations & HITL"])
     description="Retrieve all processed and pending disputes with optional filtering by stage or pipeline status.",
 )
 async def list_disputes(
-    stage: Optional[str] = Query(None, description="Filter by stage: INQUIRY, CLAIM, etc."),
-    status: Optional[str] = Query(None, description="Filter by status: DEFENDED, CONCEDED, FLAGGED_HITL, etc."),
+    stage: str | None = Query(None, description="Filter by stage: INQUIRY, CLAIM, etc."),
+    status: str | None = Query(
+        None, description="Filter by status: DEFENDED, CONCEDED, FLAGGED_HITL, etc."
+    ),
     pipeline: DisputePipeline = Depends(get_dispute_pipeline),
 ) -> list[DisputeRecord]:
     return pipeline.list_records(stage=stage, status=status)
@@ -128,5 +129,5 @@ async def override_hitl_decision(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to apply HITL override: {str(exc)}",
+            detail=f"Failed to apply HITL override: {exc!s}",
         ) from exc

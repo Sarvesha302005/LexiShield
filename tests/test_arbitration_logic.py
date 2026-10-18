@@ -3,6 +3,7 @@ Unit tests for AI Arbitration Logic, Win Probability, Expected Value, and Decisi
 """
 
 import pytest
+
 from src.core.config import get_settings
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
@@ -11,7 +12,6 @@ from src.models.schemas import (
     DisputeStage,
     Money,
     OrderCustomerInfo,
-    OrderLineItem,
     PayPalDisputeResource,
     WarehouseFulfillmentInfo,
 )

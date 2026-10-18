@@ -4,36 +4,21 @@ Pytest configuration, shared fixtures, mock generators, and sample dispute paylo
 
 import base64
 import datetime
-import io
-import json
-import zlib
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 import pytest
 import pytest_asyncio
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
 
-from src.core.config import Settings, get_settings
+from src.core.config import get_settings
 from src.core.security import _CERT_CACHE, build_signature_payload
 from src.main import app
-from src.models.schemas import (
-    CarrierTrackingInfo,
-    OrderCustomerInfo,
-    OrderLineItem,
-    TrackingEvent,
-    WarehouseFulfillmentInfo,
-)
-from src.services.carrier import CarrierService
-from src.services.llm_arbitrator import LLMArbitrator
-from src.services.order import OrderDBService
-from src.services.paypal_client import PayPalClient
-from src.services.pdf_generator import PDFGenerator
-from src.workflows.dispute_pipeline import DisputePipeline
 
 
 @pytest.fixture(autouse=True)
@@ -76,8 +61,8 @@ def test_x509_cert(test_rsa_keypair):
         .issuer_name(issuer)
         .public_key(public_key)
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
-        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365))
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
         .sign(private_key, hashes.SHA256(), default_backend())
     )
     return cert

@@ -4,10 +4,8 @@ Provides financial parameters, margin ratios, and dispute fee tiering.
 """
 
 import logging
-from typing import Optional
 
 from src.core.config import get_settings
-from src.core.exceptions import OrderDBError
 from src.models.schemas import OrderCustomerInfo, OrderLineItem
 
 logger = logging.getLogger(__name__)
@@ -29,9 +27,9 @@ class OrderDBService:
 
     async def get_order_by_transaction_or_id(
         self,
-        transaction_id: Optional[str] = None,
-        order_id: Optional[str] = None,
-        disputed_amount: Optional[float] = None,
+        transaction_id: str | None = None,
+        order_id: str | None = None,
+        disputed_amount: float | None = None,
     ) -> OrderCustomerInfo:
         """
         Fetch order record by transaction_id or order_id.
@@ -43,7 +41,9 @@ class OrderDBService:
             logger.info(f"Retrieved registered order record for {lookup_key}.")
             return self._mock_registry[lookup_key]
 
-        effective_order_id = order_id or f"ORD-{lookup_key[-8:] if len(lookup_key) >= 8 else lookup_key}"
+        effective_order_id = (
+            order_id or f"ORD-{lookup_key[-8:] if len(lookup_key) >= 8 else lookup_key}"
+        )
         effective_txn_id = transaction_id or f"TXN-{lookup_key}"
         amount = disputed_amount if disputed_amount is not None else 185.00
 

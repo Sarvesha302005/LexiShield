@@ -6,7 +6,7 @@ Implements OAuth2 token caching, exponential backoff retries, and dispute resolu
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 class PayPalClient:
     """Async client interacting with PayPal Disputes REST API."""
 
-    def __init__(self, client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self.settings = get_settings()
         self._external_client = client
-        self._access_token: Optional[str] = None
+        self._access_token: str | None = None
         self._token_expires_at: float = 0.0
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -73,10 +73,10 @@ class PayPalClient:
         self,
         method: str,
         path: str,
-        json_data: Optional[dict[str, Any]] = None,
-        files: Optional[dict[str, Any]] = None,
-        data: Optional[dict[str, Any]] = None,
-        correlation_id: Optional[str] = None,
+        json_data: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        correlation_id: str | None = None,
         max_retries: int = 3,
     ) -> dict[str, Any]:
         """Execute HTTP request with exponential backoff and jitter for 429/5xx status codes."""
@@ -123,12 +123,18 @@ class PayPalClient:
                     continue
 
                 resp.raise_for_status()
-                return resp.json() if resp.content else {"status": "SUCCESS", "status_code": resp.status_code}
+                return (
+                    resp.json()
+                    if resp.content
+                    else {"status": "SUCCESS", "status_code": resp.status_code}
+                )
 
             except httpx.HTTPStatusError as exc:
                 if attempt >= max_retries:
                     body = exc.response.text if exc.response else ""
-                    logger.error(f"PayPal API error on {method} {url}: {exc.response.status_code} - {body}")
+                    logger.error(
+                        f"PayPal API error on {method} {url}: {exc.response.status_code} - {body}"
+                    )
                     raise PayPalAPIError(
                         f"PayPal API HTTP {exc.response.status_code}",
                         status_code=exc.response.status_code,
@@ -146,7 +152,7 @@ class PayPalClient:
         self,
         dispute_id: str,
         message: str,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """
         POST /v1/customer/disputes/{dispute_id}/send-message
@@ -167,7 +173,7 @@ class PayPalClient:
         offer_amount: float,
         note: str,
         offer_type: str = "REFUND",
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """
         POST /v1/customer/disputes/{dispute_id}/make-offer
@@ -196,7 +202,7 @@ class PayPalClient:
         notes: str,
         evidence_type: str = "PROOF_OF_DELIVERY",
         filename: str = "evidentiary_dossier.pdf",
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """
         POST /v1/customer/disputes/{dispute_id}/provide-evidence
@@ -223,7 +229,7 @@ class PayPalClient:
         dispute_id: str,
         note: str = "Merchant concedes claim upon preliminary financial review.",
         accept_claim_type: str = "REFUND",
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """
         POST /v1/customer/disputes/{dispute_id}/accept-claim

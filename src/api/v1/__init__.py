@@ -1,6 +1,7 @@
 """API v1 router assembly."""
 
 from fastapi import APIRouter
+
 from src.api.v1.disputes import router as disputes_router
 from src.api.v1.webhooks import router as webhooks_router
 

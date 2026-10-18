@@ -7,7 +7,7 @@ import base64
 import logging
 import re
 import zlib
-from typing import Mapping, Optional
+from collections.abc import Mapping
 from urllib.parse import urlparse
 
 import httpx
@@ -31,9 +31,7 @@ _CERT_CACHE: dict[str, x509.Certificate] = {}
 
 # Allowed PayPal domain regex for certificate URLs to prevent SSRF
 # Matches *.paypal.com with https protocol
-PAYPAL_CERT_HOST_PATTERN = re.compile(
-    r"^(?:[a-zA-Z0-9-]+\.)*paypal\.com$", re.IGNORECASE
-)
+PAYPAL_CERT_HOST_PATTERN = re.compile(r"^(?:[a-zA-Z0-9-]+\.)*paypal\.com$", re.IGNORECASE)
 
 
 def validate_cert_url(cert_url: str) -> None:
@@ -80,7 +78,9 @@ def build_signature_payload(
     return data_string.encode("utf-8")
 
 
-async def get_certificate(cert_url: str, client: Optional[httpx.AsyncClient] = None) -> x509.Certificate:
+async def get_certificate(
+    cert_url: str, client: httpx.AsyncClient | None = None
+) -> x509.Certificate:
     """
     Retrieve and parse the X.509 certificate from the URL, using in-memory cache.
     """
@@ -114,8 +114,8 @@ async def get_certificate(cert_url: str, client: Optional[httpx.AsyncClient] = N
 async def verify_paypal_webhook_signature(
     headers: Mapping[str, str],
     raw_body: bytes,
-    webhook_id: Optional[str] = None,
-    client: Optional[httpx.AsyncClient] = None,
+    webhook_id: str | None = None,
+    client: httpx.AsyncClient | None = None,
 ) -> bool:
     """
     Verify PayPal Webhook signature based on headers and raw body.
@@ -152,7 +152,9 @@ async def verify_paypal_webhook_signature(
     ]
 
     if missing:
-        raise WebhookVerificationError(f"Missing required PayPal webhook headers: {', '.join(missing)}")
+        raise WebhookVerificationError(
+            f"Missing required PayPal webhook headers: {', '.join(missing)}"
+        )
 
     # Allow mock bypass in testing / dev if strict verification is disabled
     if not settings.STRICT_WEBHOOK_VERIFICATION and transmission_sig == "TEST_MOCK_SIGNATURE":

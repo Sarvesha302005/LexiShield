@@ -5,10 +5,8 @@ Includes high-fidelity heuristic reasoning fallback for offline testing and dete
 """
 
 import logging
-from typing import Optional
 
 from src.core.config import get_settings
-from src.core.exceptions import ArbitrationError
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
     CarrierTrackingInfo,
@@ -110,9 +108,12 @@ class LLMArbitrator:
                 score -= 0.05
 
         # 4. Reason-specific adjustments
-        if dispute.dispute_reason == DisputeReason.MERCHANDISE_OR_SERVICE_NOT_RECEIVED:
-            if carrier.status == "DELIVERED" and carrier.signed_by:
-                score += 0.05  # Strongest defense under PayPal Seller Protection
+        if (
+            dispute.dispute_reason == DisputeReason.MERCHANDISE_OR_SERVICE_NOT_RECEIVED
+            and carrier.status == "DELIVERED"
+            and carrier.signed_by
+        ):
+            score += 0.05  # Strongest defense under PayPal Seller Protection
 
         # Bound probability strictly to [0.01, 0.99]
         clamped_p = max(0.01, min(0.99, score))
@@ -154,17 +155,16 @@ class LLMArbitrator:
 
         # Stage == INQUIRY
         if stage == DisputeStage.INQUIRY:
-            # If win probability is low or inquiry is minor, offer partial settlement, else send message
-            if p_win < 0.50:
-                action = ArbitrationAction.MAKE_OFFER
-            else:
-                action = ArbitrationAction.SEND_MESSAGE
+            action = (
+                ArbitrationAction.MAKE_OFFER if p_win < 0.50 else ArbitrationAction.SEND_MESSAGE
+            )
         # Stage == CLAIM (or PRE_ARBITRATION / ARBITRATION)
         else:
-            if p_win >= self.settings.DEFEND_P_WIN_THRESHOLD:
-                action = ArbitrationAction.PROVIDE_EVIDENCE
-            else:
-                action = ArbitrationAction.ACCEPT_CLAIM
+            action = (
+                ArbitrationAction.PROVIDE_EVIDENCE
+                if p_win >= self.settings.DEFEND_P_WIN_THRESHOLD
+                else ArbitrationAction.ACCEPT_CLAIM
+            )
 
         # If HITL applies, the engine marks it for human review
         if is_hitl:
@@ -223,8 +223,8 @@ class LLMArbitrator:
             f"at {carrier.destination_address}."
         )
 
-        customer_msg: Optional[str] = None
-        offer_amt: Optional[float] = None
+        customer_msg: str | None = None
+        offer_amt: float | None = None
 
         if dispute.dispute_stage == DisputeStage.INQUIRY:
             if action == ArbitrationAction.MAKE_OFFER:
@@ -262,7 +262,7 @@ class LLMArbitrator:
                 f"2. Evaluated carrier telemetry: status={carrier.status}, GPS={'verified' if carrier.gps_latitude else 'absent'}.",
                 f"3. Evaluated warehouse packing telemetry: scale delta={warehouse.weight_delta_percent}%, serials logged={len(warehouse.scanned_serials)}.",
                 f"4. Computed P(win)={p_win:.2f} and EV=${ev:.2f} against ${dispute_fee:.2f} dispute fee.",
-                f"5. Applied stage routing and HITL review boundary checks.",
+                "5. Applied stage routing and HITL review boundary checks.",
             ],
         )
 

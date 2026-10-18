@@ -5,30 +5,26 @@ Manages end-to-end automated resolution, idempotent processing, and HITL lifecyc
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from src.core.config import get_settings
-from src.core.exceptions import DisputeAlreadyProcessedError, DisputeNotFoundError
+from src.core.exceptions import DisputeNotFoundError
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
-    CarrierTrackingInfo,
     DisputeRecord,
     DisputeStage,
     DisputeStatsSummary,
     HITLOverrideRequest,
-    OrderCustomerInfo,
     PayPalDisputeResource,
     PayPalWebhookEvent,
     PipelineExecutionStatus,
-    WarehouseFulfillmentInfo,
 )
 from src.services.carrier import CarrierService
-from src.services.warehouse import WarehouseService
 from src.services.llm_arbitrator import LLMArbitrator
 from src.services.order import OrderDBService
 from src.services.paypal_client import PayPalClient
 from src.services.pdf_generator import PDFGenerator
+from src.services.warehouse import WarehouseService
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +34,12 @@ class DisputePipeline:
 
     def __init__(
         self,
-        carrier_service: Optional[CarrierService] = None,
-        warehouse_service: Optional[WarehouseService] = None,
-        order_service: Optional[OrderDBService] = None,
-        llm_arbitrator: Optional[LLMArbitrator] = None,
-        pdf_generator: Optional[PDFGenerator] = None,
-        paypal_client: Optional[PayPalClient] = None,
+        carrier_service: CarrierService | None = None,
+        warehouse_service: WarehouseService | None = None,
+        order_service: OrderDBService | None = None,
+        llm_arbitrator: LLMArbitrator | None = None,
+        pdf_generator: PDFGenerator | None = None,
+        paypal_client: PayPalClient | None = None,
     ) -> None:
         self.settings = get_settings()
         self.carrier_service = carrier_service or CarrierService()
@@ -57,11 +53,13 @@ class DisputePipeline:
         self._dispute_store: dict[str, DisputeRecord] = {}
         self._lock = asyncio.Lock()
 
-    def get_record(self, dispute_id: str) -> Optional[DisputeRecord]:
+    def get_record(self, dispute_id: str) -> DisputeRecord | None:
         """Retrieve stored dispute record."""
         return self._dispute_store.get(dispute_id)
 
-    def list_records(self, stage: Optional[str] = None, status: Optional[str] = None) -> list[DisputeRecord]:
+    def list_records(
+        self, stage: str | None = None, status: str | None = None
+    ) -> list[DisputeRecord]:
         """List all dispute records matching optional filters."""
         records = list(self._dispute_store.values())
         if stage:
@@ -72,12 +70,16 @@ class DisputePipeline:
 
     def get_hitl_queue(self) -> list[DisputeRecord]:
         """List all disputes pending Human-in-the-Loop review."""
-        return [r for r in self._dispute_store.values() if r.hitl_flagged and r.pipeline_status == PipelineExecutionStatus.FLAGGED_HITL]
+        return [
+            r
+            for r in self._dispute_store.values()
+            if r.hitl_flagged and r.pipeline_status == PipelineExecutionStatus.FLAGGED_HITL
+        ]
 
     async def process_webhook_event(
         self,
         event: PayPalWebhookEvent,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> DisputeRecord:
         """
         Main entrypoint: Processes incoming PayPal webhook event.
@@ -95,8 +97,10 @@ class DisputePipeline:
                 existing = self._dispute_store.get(dispute_id)
                 if existing:
                     existing.pipeline_status = PipelineExecutionStatus.RESOLVED
-                    existing.audit_trail.append(f"Dispute resolved externally by PayPal at {datetime.now(timezone.utc).isoformat()}.")
-                    existing.updated_at = datetime.now(timezone.utc)
+                    existing.audit_trail.append(
+                        f"Dispute resolved externally by PayPal at {datetime.now(UTC).isoformat()}."
+                    )
+                    existing.updated_at = datetime.now(UTC)
                     return existing
 
         # Check idempotency for creation/processing
@@ -108,7 +112,9 @@ class DisputePipeline:
                 PipelineExecutionStatus.DE_ESCALATED,
                 PipelineExecutionStatus.FLAGGED_HITL,
             ):
-                logger.warning(f"[{corr_id}] Dispute {dispute_id} already processed (Status: {existing.pipeline_status}).")
+                logger.warning(
+                    f"[{corr_id}] Dispute {dispute_id} already processed (Status: {existing.pipeline_status})."
+                )
                 return existing
 
         # Execute dispute analysis & dispatch pipeline
@@ -139,8 +145,12 @@ class DisputePipeline:
         # 1. Parallel Telemetry Gathering
         logger.info(f"[{correlation_id}] Fetching external telemetry for {dispute_id}...")
         try:
-            carrier_task = self.carrier_service.get_tracking(tracking_number=None, order_id=order_id or dispute_id)
-            wh_task = self.warehouse_service.get_fulfillment_telemetry(order_id=order_id or dispute_id)
+            carrier_task = self.carrier_service.get_tracking(
+                tracking_number=None, order_id=order_id or dispute_id
+            )
+            wh_task = self.warehouse_service.get_fulfillment_telemetry(
+                order_id=order_id or dispute_id
+            )
             order_task = self.order_service.get_order_by_transaction_or_id(
                 transaction_id=txn_id,
                 order_id=order_id or dispute_id,
@@ -186,7 +196,9 @@ class DisputePipeline:
         if decision.hitl_flagged:
             pipeline_status = PipelineExecutionStatus.FLAGGED_HITL
             action_taken = "FLAGGED_FOR_HITL_REVIEW"
-            logger.info(f"[{correlation_id}] Dispute {dispute_id} routed to HITL queue. Reasons: {decision.hitl_reasons}")
+            logger.info(
+                f"[{correlation_id}] Dispute {dispute_id} routed to HITL queue. Reasons: {decision.hitl_reasons}"
+            )
 
         elif dispute.dispute_stage == DisputeStage.INQUIRY:
             if decision.recommended_action == ArbitrationAction.MAKE_OFFER:
@@ -200,7 +212,10 @@ class DisputePipeline:
                 action_taken = f"MADE_OFFER_${offer_amt:.2f}"
                 pipeline_status = PipelineExecutionStatus.DE_ESCALATED
             else:
-                msg = decision.customer_message or "Thank you for reaching out. We are reviewing your order."
+                msg = (
+                    decision.customer_message
+                    or "Thank you for reaching out. We are reviewing your order."
+                )
                 api_response = await self.paypal_client.send_message(
                     dispute_id=dispute_id,
                     message=msg,
@@ -209,7 +224,11 @@ class DisputePipeline:
                 action_taken = "SENT_DE_ESCALATION_MESSAGE"
                 pipeline_status = PipelineExecutionStatus.DE_ESCALATED
 
-        elif dispute.dispute_stage in (DisputeStage.CLAIM, DisputeStage.PRE_ARBITRATION, DisputeStage.ARBITRATION):
+        elif dispute.dispute_stage in (
+            DisputeStage.CLAIM,
+            DisputeStage.PRE_ARBITRATION,
+            DisputeStage.ARBITRATION,
+        ):
             if decision.recommended_action == ArbitrationAction.PROVIDE_EVIDENCE:
                 # Compile PDF evidentiary dossier
                 pdf_bytes = self.pdf_generator.generate_rebuttal_dossier(
@@ -265,7 +284,7 @@ class DisputePipeline:
             telemetry_warehouse=wh_data,
             telemetry_order=order_data,
             audit_trail=[
-                f"Ingested via webhook at {datetime.now(timezone.utc).isoformat()}.",
+                f"Ingested via webhook at {datetime.now(UTC).isoformat()}.",
                 f"Telemetry assembled (Carrier: {carrier_data.status}, WH: {'OK' if wh_data.quality_inspection_passed else 'FAIL'}).",
                 f"Arbitrated P(win)={decision.win_probability:.2f}, EV=${decision.expected_value:.2f}.",
                 f"Action executed: {action_taken}.",
@@ -275,7 +294,9 @@ class DisputePipeline:
         async with self._lock:
             self._dispute_store[dispute_id] = record
 
-        logger.info(f"[{correlation_id}] Dispute {dispute_id} complete -> Status: {pipeline_status}.")
+        logger.info(
+            f"[{correlation_id}] Dispute {dispute_id} complete -> Status: {pipeline_status}."
+        )
         return record
 
     async def override_hitl(
@@ -292,7 +313,9 @@ class DisputePipeline:
             if not record:
                 raise DisputeNotFoundError(f"Dispute {dispute_id} not found.")
 
-        logger.info(f"Applying HITL override on {dispute_id} by {override_req.reviewer_id}: {override_req.action}.")
+        logger.info(
+            f"Applying HITL override on {dispute_id} by {override_req.reviewer_id}: {override_req.action}."
+        )
         chosen_action = override_req.action.upper()
         api_response = None
         action_taken = None
@@ -304,7 +327,7 @@ class DisputePipeline:
                 # Reconstruct dispute resource
                 dispute_res = PayPalDisputeResource(
                     dispute_id=record.dispute_id,
-                    create_time=datetime.now(timezone.utc).isoformat(),
+                    create_time=datetime.now(UTC).isoformat(),
                     dispute_amount={"currency_code": "USD", "value": f"{record.amount:.2f}"},  # type: ignore[arg-type]
                     dispute_stage=record.stage,
                     dispute_reason=record.reason,
@@ -315,7 +338,8 @@ class DisputePipeline:
                     expected_value=record.expected_value or 0.0,
                     recommended_action=ArbitrationAction.PROVIDE_EVIDENCE,
                     executive_summary=f"Human override approved by {override_req.reviewer_id}.",
-                    rebuttal_statement=record.rebuttal_statement or "Evidence provided following manual review.",
+                    rebuttal_statement=record.rebuttal_statement
+                    or "Evidence provided following manual review.",
                 )
                 pdf_bytes = self.pdf_generator.generate_rebuttal_dossier(
                     dispute=dispute_res,
@@ -342,7 +366,10 @@ class DisputePipeline:
             status = PipelineExecutionStatus.CONCEDED
 
         elif chosen_action == "SEND_MESSAGE":
-            msg = override_req.adjusted_message or "Thank you for your inquiry. Our support team is assisting you."
+            msg = (
+                override_req.adjusted_message
+                or "Thank you for your inquiry. Our support team is assisting you."
+            )
             api_response = await self.paypal_client.send_message(dispute_id=dispute_id, message=msg)
             action_taken = "HUMAN_OVERRIDE_MESSAGE_SENT"
             status = PipelineExecutionStatus.DE_ESCALATED
@@ -364,10 +391,10 @@ class DisputePipeline:
             record.hitl_override_action = chosen_action
             record.paypal_api_response = api_response
             record.audit_trail.append(
-                f"HITL Override applied by {override_req.reviewer_id} at {datetime.now(timezone.utc).isoformat()}: "
+                f"HITL Override applied by {override_req.reviewer_id} at {datetime.now(UTC).isoformat()}: "
                 f"Action={chosen_action}, Reason='{override_req.override_reason}'."
             )
-            record.updated_at = datetime.now(timezone.utc)
+            record.updated_at = datetime.now(UTC)
 
         return record
 
@@ -377,12 +404,19 @@ class DisputePipeline:
         total = len(records)
         defended = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.DEFENDED)
         conceded = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.CONCEDED)
-        de_esc = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.DE_ESCALATED)
+        de_esc = sum(
+            1 for r in records if r.pipeline_status == PipelineExecutionStatus.DE_ESCALATED
+        )
         hitl = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.FLAGGED_HITL)
         tot_amount = sum(r.amount for r in records)
         tot_ev = sum(r.expected_value or 0.0 for r in records)
         # Avoided fees: each defended claim won or conceded claim avoiding $15/$30 escalation
-        fees_avoided = sum(r.dispute_fee_applied or 15.0 for r in records if r.pipeline_status in (PipelineExecutionStatus.DEFENDED, PipelineExecutionStatus.CONCEDED))
+        fees_avoided = sum(
+            r.dispute_fee_applied or 15.0
+            for r in records
+            if r.pipeline_status
+            in (PipelineExecutionStatus.DEFENDED, PipelineExecutionStatus.CONCEDED)
+        )
         avg_p = (sum(r.win_probability or 0.0 for r in records) / total) if total > 0 else 0.0
 
         return DisputeStatsSummary(

@@ -1,0 +1,78 @@
+name: Docker Build & Smoke Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'src/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build-and-test:
+    name: Build & Smoke Test Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: paypal-dispute-engine:test
+
+      - name: Run Container for Smoke Testing
+        run: |
+          docker run -d --name test-engine -p 8000:8000 \
+            -e ENVIRONMENT=test \
+            -e STRICT_WEBHOOK_VERIFICATION=false \
+            paypal-dispute-engine:test
+
+      - name: Wait for Container Readiness
+        run: |
+          for i in {1..30}; do
+            if curl -s -f http://localhost:8000/health | grep -q "healthy"; then
+              echo "Container is healthy and responding!"
+              exit 0
+            fi
+            echo "Waiting for container startup... ($i/30)"
+            sleep 2
+          done
+          echo "Container failed to respond in time."
+          docker logs test-engine
+          exit 1
+
+      - name: Verify API Endpoints via Smoke Test
+        run: |
+          curl -s -f http://localhost:8000/api/v1/disputes/stats/summary | grep -q "total_disputes"
+          echo "Smoke test passed successfully."
+
+      - name: Cleanup Container
+        if: always()
+        run: |
+          docker stop test-engine || true
+          docker rm test-engine || true
