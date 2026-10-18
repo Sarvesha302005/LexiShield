@@ -179,10 +179,13 @@ class LLMArbitrator:
         warehouse: WarehouseFulfillmentInfo,
         order: OrderCustomerInfo,
         dispute_fee: float,
+        compliance: object | None = None,
+        ce3: object | None = None,
     ) -> ArbitrationDecision:
         """
         Orchestrate arbitration evaluation:
         Calls Gemini 1.5 if API key is provided and live, or utilizes the deterministic engine.
+        Incorporates compliance gates ($750 mandate, AVS redirection) and Visa CE 3.0 shifts.
         """
         order_value = dispute.dispute_amount.float_value
 
@@ -193,6 +196,25 @@ class LLMArbitrator:
             warehouse=warehouse,
             order=order,
         )
+
+        # Apply Compliance Policy Guardrails ($750 signature, AVS redirection)
+        if (
+            compliance
+            and hasattr(compliance, "capped_win_probability")
+            and compliance.capped_win_probability is not None
+        ):
+            p_win = min(p_win, compliance.capped_win_probability)
+            if hasattr(compliance, "disqualification_reasons"):
+                for reason in compliance.disqualification_reasons:
+                    citations.insert(0, f"POLICY DISQUALIFICATION: {reason}")
+
+        # Apply Visa Compelling Evidence 3.0 Liability Shift
+        if ce3 and getattr(ce3, "is_qualified", False):
+            p_win = max(p_win, 0.95)
+            citations.insert(
+                0,
+                "VISA CE 3.0: Network liability shift verified via 2+ matching historical transactions.",
+            )
 
         # Compute Expected Value E[V]
         ev = self.calculate_expected_value(

@@ -1,6 +1,7 @@
 """
 Evidentiary PDF Dossier Generator: Generates clean, standardized dispute rebuttal PDFs using ReportLab.
-Compiles order details, carrier telemetry, warehouse confirmation, and structured legal rebuttal statements.
+Compiles order details, carrier telemetry, warehouse confirmation, Visa CE 3.0 liability shift schedules,
+and category-specific legal rebuttal statements (INR, SNAD, Digital Goods).
 """
 
 import io
@@ -28,6 +29,8 @@ from src.models.schemas import (
     PayPalDisputeResource,
     WarehouseFulfillmentInfo,
 )
+from src.services.compliance import ComplianceAuditResult
+from src.services.visa_ce3 import CE3QualificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +49,13 @@ class PDFGenerator:
         carrier: CarrierTrackingInfo,
         warehouse: WarehouseFulfillmentInfo,
         order: OrderCustomerInfo,
+        compliance_result: ComplianceAuditResult | None = None,
+        ce3_result: CE3QualificationResult | None = None,
         file_path: str | None = None,
     ) -> bytes:
         """
         Generate a professional evidentiary PDF rebuttal dossier.
-        Returns raw bytes and optionally writes to the specified file path.
+        Supports Visa CE 3.0 schedules, AVS address checks, and category-specific templates.
         """
         try:
             buffer = io.BytesIO()
@@ -65,12 +70,12 @@ class PDFGenerator:
 
             styles = getSampleStyleSheet()
 
-            # Custom styling
+            # Custom typography & styles
             title_style = ParagraphStyle(
                 "DocTitle",
                 parent=styles["Heading1"],
-                fontSize=20,
-                leading=24,
+                fontSize=18,
+                leading=22,
                 textColor=colors.HexColor("#0B2265"),  # PayPal navy blue
                 fontName="Helvetica-Bold",
                 spaceAfter=4,
@@ -78,54 +83,68 @@ class PDFGenerator:
             subtitle_style = ParagraphStyle(
                 "DocSubtitle",
                 parent=styles["Normal"],
-                fontSize=10,
-                leading=14,
+                fontSize=9,
+                leading=13,
                 textColor=colors.HexColor("#555555"),
-                spaceAfter=15,
+                spaceAfter=12,
             )
             h2_style = ParagraphStyle(
                 "SectionHeading",
                 parent=styles["Heading2"],
-                fontSize=12,
-                leading=16,
+                fontSize=11,
+                leading=15,
                 textColor=colors.HexColor("#0B2265"),
                 fontName="Helvetica-Bold",
-                spaceBefore=10,
-                spaceAfter=6,
+                spaceBefore=8,
+                spaceAfter=5,
             )
             body_style = ParagraphStyle(
                 "BodyTextCustom",
                 parent=styles["Normal"],
-                fontSize=9,
-                leading=13,
+                fontSize=8.5,
+                leading=12,
                 textColor=colors.HexColor("#222222"),
             )
             legal_style = ParagraphStyle(
                 "LegalText",
                 parent=styles["Normal"],
-                fontSize=8.5,
-                leading=12,
+                fontSize=8,
+                leading=11.5,
                 textColor=colors.HexColor("#333333"),
                 backColor=colors.HexColor("#F4F6F9"),
-                borderPadding=8,
-                spaceBefore=6,
-                spaceAfter=10,
+                borderPadding=7,
+                spaceBefore=4,
+                spaceAfter=8,
             )
             table_cell_style = ParagraphStyle(
                 "TableCell",
                 parent=styles["Normal"],
+                fontSize=7.5,
+                leading=10.5,
+                textColor=colors.HexColor("#222222"),
+            )
+            badge_ce3_style = ParagraphStyle(
+                "CE3Badge",
+                parent=styles["Normal"],
                 fontSize=8,
                 leading=11,
-                textColor=colors.HexColor("#222222"),
+                textColor=colors.HexColor("#065F46"),
+                backColor=colors.HexColor("#D1FAE5"),
+                borderPadding=6,
+                spaceBefore=4,
+                spaceAfter=6,
             )
 
             story = []
 
             # 1. Header Banner
-            story.append(Paragraph("EVIDENTIARY DISPUTE REBUTTAL DOSSIER", title_style))
+            cat_name = (
+                compliance_result.dispute_category_type if compliance_result else "COMMERCIAL"
+            )
+            story.append(Paragraph(f"EVIDENTIARY REBUTTAL DOSSIER ({cat_name})", title_style))
             story.append(
                 Paragraph(
-                    f"Official Case Submission for PayPal Dispute ID: <b>{dispute.dispute_id}</b> | "
+                    f"Official Submission for PayPal Dispute ID: <b>{dispute.dispute_id}</b> | "
                     f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
                     subtitle_style,
                 )
@@ -135,12 +154,26 @@ class PDFGenerator:
                     width="100%",
                     thickness=2,
                     color=colors.HexColor("#0070BA"),
-                    spaceAfter=12,
+                    spaceAfter=10,
                 )
             )
 
             # 2. Executive Summary & Case Metadata Table
-            story.append(Paragraph("1. Executive Summary & Case Overview", h2_style))
+            story.append(Paragraph("1. Executive Summary & Policy Compliance", h2_style))
+            avs_status = "VERIFIED MATCH"
+            if compliance_result and compliance_result.package_redirected:
+                avs_status = "FLAGGED (Buyer Redirection)"
+            elif compliance_result and not compliance_result.avs_address_matched:
+                avs_status = "MISMATCH"
+
+            sig_mandate_text = "N/A"
+            if compliance_result:
+                sig_mandate_text = (
+                    "PASSED"
+                    if compliance_result.signature_mandate_met
+                    else "VIOLATION (No Sig >= $750)"
+                )
+
             overview_data = [
                 [
                     Paragraph("<b>Dispute ID</b>", table_cell_style),
@@ -164,10 +197,21 @@ class PDFGenerator:
                     Paragraph(order.transaction_id, table_cell_style),
                 ],
                 [
-                    Paragraph("<b>Customer Name</b>", table_cell_style),
-                    Paragraph(order.customer_name, table_cell_style),
                     Paragraph("<b>Calculated P(win)</b>", table_cell_style),
                     Paragraph(f"<b>{decision.win_probability * 100:.1f}%</b>", table_cell_style),
+                    Paragraph("<b>AVS Address Verification</b>", table_cell_style),
+                    Paragraph(avs_status, table_cell_style),
+                ],
+                [
+                    Paragraph("<b>$750+ Signature Mandate</b>", table_cell_style),
+                    Paragraph(sig_mandate_text, table_cell_style),
+                    Paragraph("<b>Seller Protection Status</b>", table_cell_style),
+                    Paragraph(
+                        "QUALIFIED"
+                        if (not compliance_result or compliance_result.is_eligible)
+                        else "INELIGIBLE",
+                        table_cell_style,
+                    ),
                 ],
             ]
             t_overview = Table(overview_data, colWidths=[110, 155, 110, 155])
@@ -178,13 +222,13 @@ class PDFGenerator:
                         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
                         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 4),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                     ]
                 )
             )
             story.append(t_overview)
-            story.append(Spacer(1, 10))
+            story.append(Spacer(1, 8))
 
             # 3. Carrier Proof of Delivery Telemetry
             story.append(Paragraph("2. Logistics & Proof of Delivery Telemetry", h2_style))
@@ -214,7 +258,7 @@ class PDFGenerator:
                 ],
                 [
                     Paragraph("<b>Signed By</b>", table_cell_style),
-                    Paragraph(carrier.signed_by or "Direct Delivery / Porch", table_cell_style),
+                    Paragraph(carrier.signed_by or "Direct Porch / Unsigned", table_cell_style),
                     Paragraph("<b>Signature Proof URL</b>", table_cell_style),
                     Paragraph("Archived on Carrier CDN", table_cell_style),
                 ],
@@ -223,22 +267,17 @@ class PDFGenerator:
             t_carrier.setStyle(
                 TableStyle(
                     [
-                        (
-                            "BACKGROUND",
-                            (0, 0),
-                            (-1, -1),
-                            colors.HexColor("#F0FDF4"),
-                        ),  # light green tint
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F0FDF4")),
                         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#86EFAC")),
                         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#BBF7D0")),
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 4),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                     ]
                 )
             )
             story.append(t_carrier)
-            story.append(Spacer(1, 10))
+            story.append(Spacer(1, 8))
 
             # 4. Outbound Warehouse Quality & Telemetry
             story.append(
@@ -284,25 +323,74 @@ class PDFGenerator:
                         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
                         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 4),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                     ]
                 )
             )
             story.append(t_wh)
-            story.append(Spacer(1, 10))
-
-            # 5. Formal Legal Defense Statement
-            story.append(Paragraph("4. Formal Legal Rebuttal & Policy Defense", h2_style))
-            formatted_rebuttal = decision.rebuttal_statement.replace("\n", "<br/>")
-            story.append(Paragraph(formatted_rebuttal, legal_style))
             story.append(Spacer(1, 8))
 
-            # 6. Attestation
+            # 5. Visa Compelling Evidence 3.0 (CE 3.0) Schedule (If Qualified)
+            if ce3_result and ce3_result.is_qualified:
+                story.append(
+                    Paragraph(
+                        "4. Visa Compelling Evidence 3.0 (CE 3.0) Liability Shift Schedule",
+                        h2_style,
+                    )
+                )
+                story.append(Paragraph(ce3_result.evidence_summary, badge_ce3_style))
+
+                ce3_rows = [
+                    [
+                        Paragraph("<b>Historical Txn ID</b>", table_cell_style),
+                        Paragraph("<b>Fulfillment Date</b>", table_cell_style),
+                        Paragraph("<b>Amount</b>", table_cell_style),
+                        Paragraph("<b>IP Address Match</b>", table_cell_style),
+                        Paragraph("<b>Shipping Addr Match</b>", table_cell_style),
+                    ]
+                ]
+                for txn in ce3_result.qualifying_transactions:
+                    ce3_rows.append(
+                        [
+                            Paragraph(txn.transaction_id, table_cell_style),
+                            Paragraph(txn.order_date[:10], table_cell_style),
+                            Paragraph(f"${txn.amount:.2f}", table_cell_style),
+                            Paragraph(f"{txn.ip_address} (MATCH)", table_cell_style),
+                            Paragraph("EXACT MATCH", table_cell_style),
+                        ]
+                    )
+
+                t_ce3 = Table(ce3_rows, colWidths=[120, 100, 70, 120, 120])
+                t_ce3.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#065F46")),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#ECFDF5")),
+                            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#059669")),
+                            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#A7F3D0")),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                            ("TOPPADDING", (0, 0), (-1, -1), 2),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                        ]
+                    )
+                )
+                story.append(t_ce3)
+                story.append(Spacer(1, 6))
+
+            # 6. Formal Legal Defense Statement
+            sec_num = "5" if (ce3_result and ce3_result.is_qualified) else "4"
+            story.append(Paragraph(f"{sec_num}. Formal Legal Rebuttal & Policy Defense", h2_style))
+            formatted_rebuttal = decision.rebuttal_statement.replace("\n", "<br/>")
+            story.append(Paragraph(formatted_rebuttal, legal_style))
+            story.append(Spacer(1, 6))
+
+            # 7. Attestation
             attestation_text = (
                 "<b>Merchant Attestation:</b> I declare under penalty of perjury under the laws of the applicable "
-                "jurisdiction that the foregoing telemetry, tracking, and fulfillment records are true, authentic, "
-                "and extracted directly from automated immutable warehouse scanners and logistics carrier APIs."
+                "jurisdiction that the foregoing telemetry, tracking, warehouse QA records, and historical ledgers "
+                "are true, authentic, and extracted directly from immutable automated systems."
             )
             story.append(Paragraph(attestation_text, body_style))
 

@@ -227,6 +227,11 @@ class DisputeRecord(BaseModel):
     paypal_api_response: dict[str, Any] | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    merchant_id: str = "default-merchant"
+    compliance_eligible: bool | None = None
+    compliance_disqualifications: list[str] = Field(default_factory=list)
+    visa_ce3_qualified: bool | None = None
+    rma_number: str | None = None
     telemetry_carrier: CarrierTrackingInfo | None = None
     telemetry_warehouse: WarehouseFulfillmentInfo | None = None
     telemetry_order: OrderCustomerInfo | None = None
