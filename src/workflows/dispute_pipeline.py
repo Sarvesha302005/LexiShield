@@ -1,6 +1,6 @@
 """
-Dispute Pipeline Orchestrator: Chaining Ingestion -> Gather -> LLM -> Dispatch.
-Manages end-to-end automated resolution, idempotent processing, and HITL lifecycle.
+Dispute Pipeline Orchestrator: Chaining Ingestion -> Telemetry -> Compliance -> CE 3.0 -> AI -> Dispatch.
+Enterprise-grade lifecycle management with multi-tenant isolation, conversational bots, and ERP accounting.
 """
 
 import asyncio
@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from src.core.config import get_settings
 from src.core.exceptions import DisputeNotFoundError
+from src.core.tenant import TenantManager, get_tenant_manager
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
     DisputeRecord,
@@ -19,18 +20,23 @@ from src.models.schemas import (
     PayPalWebhookEvent,
     PipelineExecutionStatus,
 )
+from src.services.accounting import AccountingIntegrationService
 from src.services.carrier import CarrierService
+from src.services.compliance import ComplianceAuditResult, SellerProtectionComplianceEngine
+from src.services.conversation_bot import ConversationalSettlementBot, NegotiationStep
 from src.services.llm_arbitrator import LLMArbitrator
 from src.services.order import OrderDBService
 from src.services.paypal_client import PayPalClient
 from src.services.pdf_generator import PDFGenerator
+from src.services.rma import RMAManager
+from src.services.visa_ce3 import CE3QualificationResult, VisaCompellingEvidenceEngine
 from src.services.warehouse import WarehouseService
 
 logger = logging.getLogger(__name__)
 
 
 class DisputePipeline:
-    """Enterprise orchestrator for automated dispute intake, telemetry gathering, and resolution."""
+    """Enterprise orchestrator for automated dispute intake, compliance guardrails, and resolution."""
 
     def __init__(
         self,
@@ -40,6 +46,12 @@ class DisputePipeline:
         llm_arbitrator: LLMArbitrator | None = None,
         pdf_generator: PDFGenerator | None = None,
         paypal_client: PayPalClient | None = None,
+        compliance_engine: SellerProtectionComplianceEngine | None = None,
+        visa_ce3_engine: VisaCompellingEvidenceEngine | None = None,
+        conversation_bot: ConversationalSettlementBot | None = None,
+        accounting_service: AccountingIntegrationService | None = None,
+        rma_manager: RMAManager | None = None,
+        tenant_manager: TenantManager | None = None,
     ) -> None:
         self.settings = get_settings()
         self.carrier_service = carrier_service or CarrierService()
@@ -48,6 +60,12 @@ class DisputePipeline:
         self.llm_arbitrator = llm_arbitrator or LLMArbitrator()
         self.pdf_generator = pdf_generator or PDFGenerator()
         self.paypal_client = paypal_client or PayPalClient()
+        self.compliance_engine = compliance_engine or SellerProtectionComplianceEngine()
+        self.visa_ce3_engine = visa_ce3_engine or VisaCompellingEvidenceEngine()
+        self.conversation_bot = conversation_bot or ConversationalSettlementBot()
+        self.accounting_service = accounting_service or AccountingIntegrationService()
+        self.rma_manager = rma_manager or RMAManager()
+        self.tenant_manager = tenant_manager or get_tenant_manager()
 
         # Thread-safe in-memory dispute registry: dispute_id -> DisputeRecord
         self._dispute_store: dict[str, DisputeRecord] = {}
@@ -58,40 +76,48 @@ class DisputePipeline:
         return self._dispute_store.get(dispute_id)
 
     def list_records(
-        self, stage: str | None = None, status: str | None = None
+        self, stage: str | None = None, status: str | None = None, merchant_id: str | None = None
     ) -> list[DisputeRecord]:
         """List all dispute records matching optional filters."""
         records = list(self._dispute_store.values())
+        if merchant_id:
+            records = [r for r in records if r.merchant_id == merchant_id]
         if stage:
             records = [r for r in records if r.stage.value.upper() == stage.upper()]
         if status:
             records = [r for r in records if r.pipeline_status.value.upper() == status.upper()]
         return records
 
-    def get_hitl_queue(self) -> list[DisputeRecord]:
+    def get_hitl_queue(self, merchant_id: str | None = None) -> list[DisputeRecord]:
         """List all disputes pending Human-in-the-Loop review."""
-        return [
+        records = [
             r
             for r in self._dispute_store.values()
             if r.hitl_flagged and r.pipeline_status == PipelineExecutionStatus.FLAGGED_HITL
         ]
+        if merchant_id:
+            records = [r for r in records if r.merchant_id == merchant_id]
+        return records
 
     async def process_webhook_event(
         self,
         event: PayPalWebhookEvent,
         correlation_id: str | None = None,
+        merchant_id: str | None = None,
     ) -> DisputeRecord:
         """
-        Main entrypoint: Processes incoming PayPal webhook event.
-        Ensures idempotent handling and routes based on event type.
+        Main intake entrypoint: Processes incoming PayPal webhook event with idempotency.
         """
         corr_id = correlation_id or f"CORR-{event.id}"
         dispute = event.resource
         dispute_id = dispute.dispute_id
+        effective_merchant = merchant_id or "default-merchant"
 
-        logger.info(f"[{corr_id}] Ingesting webhook {event.event_type} for dispute {dispute_id}.")
+        logger.info(
+            f"[{corr_id}] Ingesting webhook {event.event_type} for dispute {dispute_id} (Merchant: {effective_merchant})."
+        )
 
-        # Handle RESOLVED events
+        # Handle external dispute resolution events
         if event.event_type == "CUSTOMER.DISPUTE.RESOLVED":
             async with self._lock:
                 existing = self._dispute_store.get(dispute_id)
@@ -103,7 +129,7 @@ class DisputePipeline:
                     existing.updated_at = datetime.now(UTC)
                     return existing
 
-        # Check idempotency for creation/processing
+        # Idempotency check
         async with self._lock:
             existing = self._dispute_store.get(dispute_id)
             if existing and existing.pipeline_status in (
@@ -117,19 +143,33 @@ class DisputePipeline:
                 )
                 return existing
 
-        # Execute dispute analysis & dispatch pipeline
-        return await self.execute_dispute_resolution(dispute=dispute, correlation_id=corr_id)
+        return await self.execute_dispute_resolution(
+            dispute=dispute,
+            correlation_id=corr_id,
+            merchant_id=effective_merchant,
+        )
 
     async def execute_dispute_resolution(
         self,
         dispute: PayPalDisputeResource,
         correlation_id: str,
+        merchant_id: str = "default-merchant",
     ) -> DisputeRecord:
         """
-        Gathers telemetry, runs arbitration, compiles evidence if needed, and executes PayPal actions.
+        Executes end-to-end resolution:
+        1. Tenant credentials & rules resolution
+        2. ERP accounting ledger frozen funds logging
+        3. Parallel logistics telemetry gathering
+        4. PayPal Seller Protection compliance audit ($750 mandate, AVS check)
+        5. Visa Compelling Evidence 3.0 pre-dispute matching
+        6. AI arbitration & financial expected value calculation
+        7. Conversational bot or formal defense dispatching
         """
         dispute_id = dispute.dispute_id
         amount = dispute.dispute_amount.float_value
+
+        # Resolve tenant configuration
+        tenant = self.tenant_manager.get_tenant(merchant_id)
 
         # Extract transaction identifiers
         txn_id = None
@@ -142,18 +182,26 @@ class DisputePipeline:
             if txn.buyer:
                 customer_email = txn.buyer.email
 
-        # 1. Parallel Telemetry Gathering
+        effective_order_id = order_id or dispute_id
+
+        # 1. Log ERP Accounting Frozen Funds Liability
+        self.accounting_service.log_dispute_intake_frozen_funds(
+            dispute_id=dispute_id,
+            merchant_id=tenant.merchant_id,
+            order_id=effective_order_id,
+            amount=amount,
+        )
+
+        # 2. Parallel Telemetry Gathering
         logger.info(f"[{correlation_id}] Fetching external telemetry for {dispute_id}...")
         try:
             carrier_task = self.carrier_service.get_tracking(
-                tracking_number=None, order_id=order_id or dispute_id
+                tracking_number=None, order_id=effective_order_id
             )
-            wh_task = self.warehouse_service.get_fulfillment_telemetry(
-                order_id=order_id or dispute_id
-            )
+            wh_task = self.warehouse_service.get_fulfillment_telemetry(order_id=effective_order_id)
             order_task = self.order_service.get_order_by_transaction_or_id(
                 transaction_id=txn_id,
-                order_id=order_id or dispute_id,
+                order_id=effective_order_id,
                 disputed_amount=amount,
             )
 
@@ -164,6 +212,7 @@ class DisputePipeline:
             logger.error(f"[{correlation_id}] Failed gathering telemetry: {exc}")
             record = DisputeRecord(
                 dispute_id=dispute_id,
+                merchant_id=tenant.merchant_id,
                 stage=dispute.dispute_stage,
                 reason=dispute.dispute_reason,
                 amount=amount,
@@ -174,10 +223,22 @@ class DisputePipeline:
                 self._dispute_store[dispute_id] = record
             return record
 
-        # 2. Determine Dispute Fee
+        # 3. PayPal Seller Protection Compliance Guardrails
+        compliance_result: ComplianceAuditResult = self.compliance_engine.audit_dispute(
+            dispute=dispute,
+            carrier=carrier_data,
+            order=order_data,
+        )
+
+        # 4. Visa Compelling Evidence 3.0 (CE 3.0) Network Check
+        ce3_result: CE3QualificationResult | None = None
+        if tenant.custom_rules.visa_ce3_enabled:
+            ce3_result = self.visa_ce3_engine.evaluate_ce3_eligibility(order=order_data)
+
+        # 5. Determine Dispute Fee
         fee = self.order_service.determine_dispute_fee(order_data.merchant_monthly_disputes_count)
 
-        # 3. AI Arbitration Layer
+        # 6. AI Arbitration & Financial Risk Evaluation
         logger.info(f"[{correlation_id}] Executing AI arbitration for {dispute_id}...")
         decision: ArbitrationDecision = await self.llm_arbitrator.arbitrate(
             dispute=dispute,
@@ -185,13 +246,23 @@ class DisputePipeline:
             warehouse=wh_data,
             order=order_data,
             dispute_fee=fee,
+            compliance=compliance_result,
+            ce3=ce3_result,
         )
 
-        # 4. Action Dispatching
+        # Apply tenant custom threshold overrides
+        if amount > tenant.custom_rules.hitl_order_value_threshold:
+            decision.hitl_flagged = True
+            decision.hitl_reasons.append(
+                f"Tenant rule: Order value (${amount:.2f}) exceeds merchant threshold (${tenant.custom_rules.hitl_order_value_threshold:.2f})."
+            )
+
+        # 7. Action Dispatching
         pipeline_status = PipelineExecutionStatus.ANALYZING
         action_taken = None
         api_response = None
         pdf_path = None
+        rma_num = None
 
         if decision.hitl_flagged:
             pipeline_status = PipelineExecutionStatus.FLAGGED_HITL
@@ -200,74 +271,114 @@ class DisputePipeline:
                 f"[{correlation_id}] Dispute {dispute_id} routed to HITL queue. Reasons: {decision.hitl_reasons}"
             )
 
+        # INQUIRY Stage: Conversational Settlement Bot
         elif dispute.dispute_stage == DisputeStage.INQUIRY:
-            if decision.recommended_action == ArbitrationAction.MAKE_OFFER:
-                offer_amt = decision.offer_amount or round(amount * 0.50, 2)
+            step, msg, offer_val = self.conversation_bot.advance_negotiation(
+                dispute=dispute,
+                carrier=carrier_data,
+                order=order_data,
+            )
+
+            if step == NegotiationStep.STEP_2_PARTIAL_REFUND and offer_val:
                 api_response = await self.paypal_client.make_offer(
                     dispute_id=dispute_id,
-                    offer_amount=offer_amt,
-                    note=decision.customer_message or "Settlement offer",
+                    offer_amount=offer_val,
+                    note=msg,
                     correlation_id=correlation_id,
                 )
-                action_taken = f"MADE_OFFER_${offer_amt:.2f}"
-                pipeline_status = PipelineExecutionStatus.DE_ESCALATED
+                action_taken = f"BOT_OFFERED_PARTIAL_REFUND_${offer_val:.2f}"
             else:
-                msg = (
-                    decision.customer_message
-                    or "Thank you for reaching out. We are reviewing your order."
-                )
                 api_response = await self.paypal_client.send_message(
                     dispute_id=dispute_id,
                     message=msg,
                     correlation_id=correlation_id,
                 )
-                action_taken = "SENT_DE_ESCALATION_MESSAGE"
-                pipeline_status = PipelineExecutionStatus.DE_ESCALATED
+                action_taken = f"BOT_SENT_{step.value}"
 
+            pipeline_status = PipelineExecutionStatus.DE_ESCALATED
+
+        # CLAIM Stage: Defend via Dossier or Concede
         elif dispute.dispute_stage in (
             DisputeStage.CLAIM,
             DisputeStage.PRE_ARBITRATION,
             DisputeStage.ARBITRATION,
         ):
-            if decision.recommended_action == ArbitrationAction.PROVIDE_EVIDENCE:
-                # Compile PDF evidentiary dossier
+            # If unwinnable due to strict policy mandate and tenant allows auto-concede
+            if not compliance_result.is_eligible and tenant.custom_rules.auto_concede_unwinnable:
+                api_response = await self.paypal_client.accept_claim(
+                    dispute_id=dispute_id,
+                    note=f"Merchant conceded due to Seller Protection policy exclusion: {'; '.join(compliance_result.disqualification_reasons)}",
+                    correlation_id=correlation_id,
+                )
+                action_taken = "CONCEDED_POLICY_EXCLUSION"
+                pipeline_status = PipelineExecutionStatus.CONCEDED
+                self.accounting_service.log_dispute_concession(
+                    dispute_id=dispute_id,
+                    merchant_id=tenant.merchant_id,
+                    order_id=effective_order_id,
+                    amount=amount,
+                    dispute_fee=fee,
+                )
+
+            elif decision.recommended_action == ArbitrationAction.PROVIDE_EVIDENCE:
+                # Compile comprehensive PDF dossier with CE 3.0 and compliance schedules
                 pdf_bytes = self.pdf_generator.generate_rebuttal_dossier(
                     dispute=dispute,
                     decision=decision,
                     carrier=carrier_data,
                     warehouse=wh_data,
                     order=order_data,
+                    compliance_result=compliance_result,
+                    ce3_result=ce3_result,
                 )
                 pdf_path = f"artifacts/dossiers/dispute_{dispute_id}_evidence.pdf"
 
-                # Dispatch evidence to PayPal
                 api_response = await self.paypal_client.provide_evidence(
                     dispute_id=dispute_id,
                     pdf_bytes=pdf_bytes,
-                    notes=decision.rebuttal_statement[:2000],  # PayPal character limit friendly
+                    notes=decision.rebuttal_statement[:2000],
                     correlation_id=correlation_id,
                 )
                 action_taken = "PROVIDED_EVIDENCE_DOSSIER"
                 pipeline_status = PipelineExecutionStatus.DEFENDED
+
+                # Log ERP accounting win/defense posture
+                self.accounting_service.log_dispute_won(
+                    dispute_id=dispute_id,
+                    merchant_id=tenant.merchant_id,
+                    order_id=effective_order_id,
+                    amount=amount,
+                )
+
             else:
-                # Concede claim
+                # Concession
                 api_response = await self.paypal_client.accept_claim(
                     dispute_id=dispute_id,
-                    note="Merchant concedes claim upon review.",
+                    note="Merchant concedes claim upon preliminary review.",
                     correlation_id=correlation_id,
                 )
                 action_taken = "ACCEPTED_CLAIM_CONCESSION"
                 pipeline_status = PipelineExecutionStatus.CONCEDED
 
-        # 5. Build and Store Record
+                # Log ERP accounting loss write-off
+                self.accounting_service.log_dispute_concession(
+                    dispute_id=dispute_id,
+                    merchant_id=tenant.merchant_id,
+                    order_id=effective_order_id,
+                    amount=amount,
+                    dispute_fee=fee,
+                )
+
+        # 8. Build and Store Record
         record = DisputeRecord(
             dispute_id=dispute_id,
+            merchant_id=tenant.merchant_id,
             stage=dispute.dispute_stage,
             reason=dispute.dispute_reason,
             amount=amount,
             currency="USD",
             seller_transaction_id=txn_id,
-            order_id=order_data.order_id,
+            order_id=effective_order_id,
             customer_email=customer_email or order_data.customer_email,
             pipeline_status=pipeline_status,
             win_probability=decision.win_probability,
@@ -280,12 +391,17 @@ class DisputePipeline:
             rebuttal_statement=decision.rebuttal_statement,
             pdf_dossier_path=pdf_path,
             paypal_api_response=api_response,
+            compliance_eligible=compliance_result.is_eligible,
+            compliance_disqualifications=compliance_result.disqualification_reasons,
+            visa_ce3_qualified=ce3_result.is_qualified if ce3_result else False,
+            rma_number=rma_num,
             telemetry_carrier=carrier_data,
             telemetry_warehouse=wh_data,
             telemetry_order=order_data,
             audit_trail=[
-                f"Ingested via webhook at {datetime.now(UTC).isoformat()}.",
-                f"Telemetry assembled (Carrier: {carrier_data.status}, WH: {'OK' if wh_data.quality_inspection_passed else 'FAIL'}).",
+                f"Ingested for merchant '{tenant.merchant_id}' at {datetime.now(UTC).isoformat()}.",
+                f"Compliance Audit: {'ELIGIBLE' if compliance_result.is_eligible else 'DISQUALIFIED'}.",
+                f"Visa CE 3.0: {'QUALIFIED' if (ce3_result and ce3_result.is_qualified) else 'NOT_APPLICABLE'}.",
                 f"Arbitrated P(win)={decision.win_probability:.2f}, EV=${decision.expected_value:.2f}.",
                 f"Action executed: {action_taken}.",
             ],
@@ -305,8 +421,7 @@ class DisputePipeline:
         override_req: HITLOverrideRequest,
     ) -> DisputeRecord:
         """
-        Allows human reviewers to inspect, approve, or override a flagged dispute.
-        Dispatches the chosen PayPal action immediately upon sign-off.
+        Human reviewer override: Dispatches approved action and records accounting events.
         """
         async with self._lock:
             record = self._dispute_store.get(dispute_id)
@@ -322,9 +437,7 @@ class DisputePipeline:
         status = PipelineExecutionStatus.OVERRIDDEN
 
         if chosen_action == "DEFEND":
-            # Generate dossier and provide evidence
             if record.telemetry_carrier and record.telemetry_warehouse and record.telemetry_order:
-                # Reconstruct dispute resource
                 dispute_res = PayPalDisputeResource(
                     dispute_id=record.dispute_id,
                     create_time=datetime.now(UTC).isoformat(),
@@ -356,6 +469,12 @@ class DisputePipeline:
                 )
                 action_taken = "HUMAN_OVERRIDE_DEFENDED"
                 status = PipelineExecutionStatus.DEFENDED
+                self.accounting_service.log_dispute_won(
+                    dispute_id=dispute_id,
+                    merchant_id=record.merchant_id,
+                    order_id=record.order_id or dispute_id,
+                    amount=record.amount,
+                )
 
         elif chosen_action == "CONCEDE":
             api_response = await self.paypal_client.accept_claim(
@@ -364,6 +483,13 @@ class DisputePipeline:
             )
             action_taken = "HUMAN_OVERRIDE_CONCEDED"
             status = PipelineExecutionStatus.CONCEDED
+            self.accounting_service.log_dispute_concession(
+                dispute_id=dispute_id,
+                merchant_id=record.merchant_id,
+                order_id=record.order_id or dispute_id,
+                amount=record.amount,
+                dispute_fee=record.dispute_fee_applied or 15.0,
+            )
 
         elif chosen_action == "SEND_MESSAGE":
             msg = (
@@ -398,9 +524,11 @@ class DisputePipeline:
 
         return record
 
-    def get_stats_summary(self) -> DisputeStatsSummary:
-        """Calculate executive metrics across all ingested disputes."""
+    def get_stats_summary(self, merchant_id: str | None = None) -> DisputeStatsSummary:
+        """Calculate executive metrics across ingested disputes."""
         records = list(self._dispute_store.values())
+        if merchant_id:
+            records = [r for r in records if r.merchant_id == merchant_id]
         total = len(records)
         defended = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.DEFENDED)
         conceded = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.CONCEDED)
@@ -410,7 +538,6 @@ class DisputePipeline:
         hitl = sum(1 for r in records if r.pipeline_status == PipelineExecutionStatus.FLAGGED_HITL)
         tot_amount = sum(r.amount for r in records)
         tot_ev = sum(r.expected_value or 0.0 for r in records)
-        # Avoided fees: each defended claim won or conceded claim avoiding $15/$30 escalation
         fees_avoided = sum(
             r.dispute_fee_applied or 15.0
             for r in records
@@ -432,7 +559,6 @@ class DisputePipeline:
         )
 
 
-# Global singleton instance for the application
 pipeline_instance = DisputePipeline()
 
 

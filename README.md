@@ -1,120 +1,156 @@
-# Automated PayPal Dispute Resolution Engine
+# LexiShield: Enterprise PayPal Dispute Defense & Deflection Engine
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2.8+-e92063.svg)](https://docs.pydantic.dev/)
 [![CI Pipeline](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml)
 [![Docker Build](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml)
-[![Tests](https://img.shields.io/badge/Tests-28%20Passed%20(87%25%20cov)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-39%20Passed%20(88%25%20cov)-brightgreen.svg)]()
 
-Enterprise-grade, automated dispute resolution, AI arbitration, and evidence rebuttal system built on Python 3.12+, FastAPI, Pydantic v2, and AsyncIO.
+**LexiShield** is an autonomous chargeback defense and dispute deflection engine built on Python 3.12+, FastAPI, Pydantic v2, and AsyncIO. It transitions dispute resolution from a passive pipeline into an active, multi-layered financial defense shield.
 
 ---
 
-## 1. Architectural Architecture & Workflow
+## 1. Enterprise Defense Architecture
 
 ```mermaid
 flowchart TD
-    WH[PayPal Webhook Intake] --> SEC[Cryptographic X.509 & RSA Sig Verification]
-    SEC --> IDEM[Idempotency Check dispute_id]
-    IDEM --> GATHER[Parallel Telemetry Aggregator]
+    WH[PayPal Webhooks & Card Alerts] --> SEC[Cryptographic X.509 & RSA Sig Verification]
+    SEC --> PRE{Alert or Dispute?}
     
-    subgraph External Telemetry Connectors
+    PRE -->|Ethoca / Verifi Alert 20-72h Lead| DEFLECT[Pre-Chargeback Deflection: Zero-Fee Auto-Refund]
+    DEFLECT --> SAVE[Avert Dispute Fee $15-$30 & Protect Ratio]
+    
+    PRE -->|CUSTOMER.DISPUTE.CREATED| IDEM[Idempotency & Tenant BYOK Isolation]
+    IDEM --> ACC_FREEZE[ERP Ledger: Record Frozen Funds Liability]
+    
+    ACC_FREEZE --> GATHER[Parallel Telemetry Aggregator]
+    subgraph External Connectors
         GATHER --> C1[CarrierService: GPS & Proof of Delivery]
         GATHER --> C2[WarehouseService: Weight & Barcode/Serial Scans]
         GATHER --> C3[OrderDBService: Margins & Customer History]
     end
     
-    C1 --> ARB[AI Arbitration Layer Gemini 1.5 / Heuristic]
-    C2 --> ARB
-    C3 --> ARB
+    C1 --> COMPL[PayPal Policy Guardrails: $750+ Sig & AVS Match]
+    C2 --> COMPL
+    C3 --> COMPL
     
-    ARB --> CALC[Compute P win and Expected Value E V]
-    CALC --> ROUTE{Decision Routing}
+    COMPL --> CE3[Visa Compelling Evidence 3.0: Historical Ledger Query]
+    CE3 --> ARB[AI Arbitration Layer: Gemini 1.5 & Expected Value E V]
     
-    ROUTE -- Stage == INQUIRY --> DE_ESC[De-escalate: send-message or make-offer]
-    ROUTE -- Stage == CLAIM & P win >= 0.70 --> PDF[Generate ReportLab PDF Dossier]
-    PDF --> DEF[POST provide-evidence]
-    ROUTE -- Stage == CLAIM & P win < 0.70 --> CONC[POST accept-claim Concession]
-    ROUTE -- Borderline P win or Value > $300 --> HITL[HITL Queue & Operator Review]
+    ARB --> ROUTE{Dispute Stage & Strategy}
     
-    HITL --> OVERRIDE[Operator Override Endpoint]
-    OVERRIDE --> DEF
-    OVERRIDE --> CONC
+    ROUTE -- Stage == INQUIRY --> BOT[Conversational Settlement Bot: 3-Step Ladder]
+    ROUTE -- Stage == CLAIM & P win >= 0.70 --> PDF[Compile PDF Rebuttal + CE 3.0 Schedule]
+    PDF --> SUBMIT[POST provide-evidence]
+    SUBMIT --> ACC_WIN[ERP Ledger: Restore Unfrozen Operating Funds]
+    
+    ROUTE -- Stage == CLAIM & Unwinnable / P win < 0.70 --> CONC[Strategic Concession: POST accept-claim]
+    CONC --> ACC_LOSS[ERP Ledger: Write Off COGS & Dispute Fee]
+    
+    ROUTE -- Borderline P win or Value > $300 --> HITL[HITL Queue & Operator Override API]
 ```
 
 ---
 
-## 2. Decision Logic & Financial Risk Engine
+## 2. Core Enterprise Defense Pillars
 
-The engine computes **Win Probability $P(win)$** and **Expected Value $E[V]$** to guide financial decisions:
+### 1. PayPal Seller Protection Compliance & Policy Guardrails
+* **The $750+ Signature Mandate**: Tangible orders of $\$750.00\text{ USD}$ or higher strictly require courier signature confirmation to qualify for Item Not Received (INR) protection. If signature telemetry is missing, the engine automatically caps $P(win)$ at $0.05$ and concedes to avoid paying non-refundable dispute fees on unwinnable cases.
+* **AVS Exact Address Matching & Redirection**: Compares delivered coordinates with the confirmed PayPal shipping address. If tracking events indicate the buyer rerouted or redirected the parcel post-dispatch, PayPal revokes Seller Protection; LexiShield highlights this violation in the rebuttal dossier.
+* **Category Exclusion Filtering**: Applies distinct evidence templates tailored to **INR** (logistics telemetry & GPS), **SNAD** (pre-shipment QA inspection & hardware serial matching), or **Digital Goods** (access timestamps, IP logs, and license activations).
 
-$$E[V] = P(win) \times V_{order} - (1 - P(win)) \times (V_{order} + F_{dispute})$$
+### 2. Visa Compelling Evidence 3.0 (CE 3.0) Engine
+* **Pre-Dispute Historical Ledger Query**: For Reason Code 10.4 (Card-Not-Present Fraud), queries the merchant ledger for **at least two undisputed prior transactions** from the same cardholder between 120 and 365 days prior.
+* **Two-Factor Matching Verification**: Validates that prior transactions share matching core elements: technical identifier (**IP address** or **device fingerprint**) plus identity factor (**customer ID** or **shipping address**).
+* **Automated CE 3.0 Rebuttal Schedule**: Injects an immutable historical ledger schedule directly into the ReportLab PDF dossier, shifting chargeback liability away from the merchant under card network rules.
 
-Where:
-- $V_{order}$ = Disputed transaction gross amount.
-- $F_{dispute}$ = Applied dispute fee:
-  - **Standard Fee**: $\$15.00$
-  - **High-Volume Fee**: $\$30.00$ (triggered when merchant monthly disputes count $\ge 100$).
-- $P(win)$ = Win probability derived from carrier delivery confirmation, courier GPS telemetry, signed recipient, barcode/serial match, and scale weight variance.
+### 3. Pre-Chargeback Deflection via Alert Networks (Ethoca & Verifi RDR)
+* **Early Card Issuer Notifications**: Listens to alert webhooks delivered 20–72 hours *before* a chargeback formally posts.
+* **Zero-Fee Automated Refund**: Matches inbound alerts to active orders and issues an immediate transaction refund via PayPal. This satisfies the card issuer alert, preventing `CUSTOMER.DISPUTE.CREATED` from ever firing, avoiding the $\$15–\$30$ dispute fee and maintaining a $0\%$ chargeback ratio.
 
-### Branching Rules
-1. **Stage `INQUIRY`**:
-   - De-escalate proactively: dispatches `send-message` (if $P(win) \ge 0.50$) or `make-offer` with partial settlement (if $P(win) < 0.50$).
-2. **Stage `CLAIM`**:
-   - **$P(win) \ge 0.70$ (Defense)**: Compiles an evidentiary PDF rebuttal dossier using ReportLab and submits via `POST /v1/customer/disputes/{id}/provide-evidence`.
-   - **$P(win) < 0.70$ (Concession)**: Submits immediate claim concession via `POST /v1/customer/disputes/{id}/accept-claim` to avoid escalated arbitration fees and penalties.
-3. **Edge Cases (Human-in-the-Loop)**:
-   - Order Value $> \$300.00$ OR $0.60 \le P(win) < 0.75$: Flags dispute for manual review (`FLAGGED_HITL`), preventing irreversible automated actions until approved via the HITL API.
+### 4. Interactive Conversational Settlement Bot (Inquiry Stage)
+* **Autonomous Buyer Negotiation**: Multi-turn conversational state machine operating before PayPal steps in to arbitrate:
+  - *Turn 1 (Troubleshooting)*: Sends courier tracking links, verified GPS timestamps, and delivery verification steps.
+  - *Turn 2 (Courtesy Settlement)*: Offers a $20\%$ courtesy partial refund or free replacement reshipment for cosmetic or minor defect claims.
+  - *Turn 3 (Arbitration Handover)*: Prepares full evidentiary defense if negotiations break down.
+
+### 5. Multi-Tenant Enterprise SaaS Infrastructure
+* **Row-Level Security (RLS) Isolation**: Partitions disputes, ledgers, and settings by `merchant_id`.
+* **Bring-Your-Own-Credentials (BYOK)**: Supports distinct encrypted PayPal credentials, webhook IDs, and risk thresholds per tenant.
+* **Custom Rules Engine**: Lets each merchant configure custom HITL review cutoffs (e.g. $\$150$ vs $\$300$), minimum defense probabilities ($P(win) \ge 0.80$), and automated policy concessions.
+
+### 6. ERP & Accounting Lifecycle Webhooks and RMA
+* **Double-Entry Ledger Provisioning**: Dispatches accounting events compatible with NetSuite, QuickBooks, and Xero:
+  - *Intake*: Records pending escrow liability (`Debit: 1050-Frozen-Escrow`, `Credit: 1010-Operating-Cash`).
+  - *Defense Win*: Restores operating cash (`Debit: 1010-Operating-Cash`, `Credit: 1050-Frozen-Escrow`).
+  - *Concession/Loss*: Writes off COGS and fees (`Debit: 6100-Dispute-Fee-Expense`, `Debit: 5010-COGS-Loss`).
+* **Automated Return Labels (RMA)**: Generates prepaid carrier return labels and tracks inbound warehouse delivery scans before releasing refunds.
 
 ---
 
 ## 3. Directory Structure
 
 ```
-paypal_dispute_engine/
-├── .env.example                         # Environment variable definitions
-├── pyproject.toml                       # Build config, dependencies & tool settings
+├── .env.example                         # Environment configuration template
+├── .gitignore                           # Git ignore rules for python & bytecode
+├── pyproject.toml                       # Build config, dependencies & test configuration
 ├── Dockerfile                           # Multi-stage production container
-├── docker-compose.yml                   # Service orchestration with healthcheck
+├── docker-compose.yml                   # Service orchestration with health checks & persistent volumes
 ├── README.md                            # Complete engineering documentation
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                       # Python 3.12/3.13 matrix test & ruff linting
+│       └── docker.yml                   # Docker buildx & container smoke testing
 ├── src/
-│   ├── __init__.py
-│   ├── main.py                          # FastAPI entrypoint, lifespan, CORS & middleware
+│   ├── main.py                          # FastAPI app entrypoint, correlation IDs & middleware
 │   ├── core/
-│   │   ├── config.py                    # Pydantic BaseSettings
-│   │   ├── security.py                  # X.509 cert validation, SSRF checks, RSA signatures
-│   │   └── exceptions.py                # Domain exceptions & HTTP mappings
+│   │   ├── config.py                    # Pydantic v2 BaseSettings
+│   │   ├── security.py                  # X.509 cert validation, SSRF shield, RSA signature verification
+│   │   ├── tenant.py                    # Multi-tenant isolation & BYOK credential manager
+│   │   └── exceptions.py                # Domain-specific custom exceptions
 │   ├── models/
-│   │   ├── schemas.py                   # Pydantic v2 schemas for webhooks, telemetry & records
-│   │   └── arbitration.py               # AI output schemas (P(win), EV, strategy, citations)
+│   │   ├── schemas.py                   # Pydantic models for webhooks, telemetry & dispute records
+│   │   ├── arbitration.py               # AI output schemas (P(win), EV, strategy, citations)
+│   │   └── tenant.py                    # Multi-tenant schemas & custom rules
 │   ├── services/
-│   │   ├── carrier.py                   # Carrier tracking aggregator (EasyPost/FedEx mock)
-│   │   ├── warehouse.py                 # Outbound packing telemetry & image retriever
-│   │   ├── order.py                     # Order database service & dispute fee tiering
-│   │   ├── llm_arbitrator.py            # Gemini 1.5 multimodal reasoning & heuristic arbitrator
-│   │   ├── pdf_generator.py             # ReportLab evidentiary PDF rebuttal builder
-│   │   └── paypal_client.py             # Resilient async PayPal REST API client
+│   │   ├── carrier.py                   # Logistics telemetry aggregator (EasyPost/FedEx mock with GPS)
+│   │   ├── warehouse.py                 # Outbound packing telemetry (scale weights, barcode serials, photos)
+│   │   ├── order.py                     # Order database service & dispute fee tiering ($15 vs $30)
+│   │   ├── compliance.py                # $750+ signature mandate, AVS check, redirection detector
+│   │   ├── visa_ce3.py                  # Visa Compelling Evidence 3.0 pre-dispute matching engine
+│   │   ├── alerts.py                    # Pre-chargeback deflection service (Ethoca & Verifi RDR)
+│   │   ├── conversation_bot.py          # Multi-turn conversational settlement bot (Inquiry stage)
+│   │   ├── accounting.py                # ERP double-entry ledger integration (NetSuite/QuickBooks)
+│   │   ├── rma.py                       # Automated return label & inbound inspection manager
+│   │   ├── llm_arbitrator.py            # Multimodal Gemini 1.5 + heuristic arbitration & EV calculation
+│   │   ├── pdf_generator.py             # ReportLab evidentiary rebuttal PDF builder with CE 3.0 schedule
+│   │   └── paypal_client.py             # Resilient async HTTP client for PayPal Disputes REST API
 │   ├── workflows/
-│   │   └── dispute_pipeline.py          # Orchestrator chaining Intake -> Gather -> Arbitrate -> Dispatch
+│   │   └── dispute_pipeline.py          # Orchestrator chaining Ingestion -> Telemetry -> Policy -> Dispatch
 │   └── api/
-│       ├── __init__.py
 │       └── v1/
 │           ├── __init__.py              # V1 router assembly
-│           ├── webhooks.py              # POST /api/v1/paypal/webhook
-│           └── disputes.py              # GET/POST /api/v1/disputes (queue, PDF, stats, override)
+│           ├── webhooks.py              # Inbound PayPal dispute webhook intake
+│           ├── disputes.py              # Dispute monitoring, PDF downloads, and HITL overrides
+│           ├── alerts.py                # Pre-dispute card alert listener (Ethoca/Verifi)
+│           ├── tenants.py               # Multi-tenant onboarding and custom rule management
+│           └── rma.py                   # Automated RMA return label generation & verification
 └── tests/
-    ├── conftest.py                      # RSA keypair fixtures, cert mocks & sample dispute JSONs
-    ├── test_webhook_security.py         # Tests for signature verification, SSRF & tampering
+    ├── conftest.py                      # Cryptographic fixtures & sample payloads
+    ├── test_compliance_guardrails.py    # Tests for $750 mandate, AVS checks, package redirection
+    ├── test_visa_ce3.py                 # Tests for Visa CE 3.0 lookback & two-factor matching
+    ├── test_advanced_features.py        # Tests for alert deflection, chat bot, ERP accounting, and RMA
     ├── test_arbitration_logic.py        # Tests for decision branching, P(win), and EV logic
-    └── test_end_to_end_pipeline.py      # End-to-end integration tests for all 3 paths & HITL
+    ├── test_webhook_security.py         # Tests for signature verification, SSRF & tampering
+    └── test_end_to_end_pipeline.py      # End-to-end integration tests for all decision paths
 ```
 
 ---
 
-## 4. Local Setup & Quickstart
+## 4. Quickstart & Local Setup
 
-### Option A: Running with Docker Compose (Recommended)
+### Running with Docker Compose
 
 ```bash
 # 1. Copy environment configuration
@@ -123,19 +159,19 @@ cp .env.example .env
 # 2. Build and start container in detached mode
 docker-compose up -d --build
 
-# 3. Inspect service logs
+# 3. View live logs
 docker-compose logs -f dispute-engine
 ```
 
-Access Swagger UI documentation at: `http://localhost:8000/docs`
+Open Swagger UI documentation at: `http://localhost:8000/docs`
 
 ---
 
-### Option B: Local Python Environment
+### Local Python Environment
 
 ```bash
 # 1. Install dependencies
-pip install .
+pip install ".[dev]"
 
 # 2. Start development server
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
@@ -145,89 +181,74 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 5. Running the Test Suite
 
-Run unit and integration tests with coverage reporting:
+Execute the full suite of **39 tests** with coverage metrics:
 
 ```bash
 python -m pytest -v --cov=src --cov-report=term-missing
 ```
 
-Output:
 ```text
-============================= 28 passed in 3.38s ==============================
-Coverage: 87% across all core engines and endpoints.
+============================= test session starts =============================
+platform win32 -- Python 3.13.7, pytest-8.4.2, pluggy-1.6.0
+collected 39 items
+
+tests/test_advanced_features.py .....                                    [ 12%]
+tests/test_arbitration_logic.py ........                                 [ 33%]
+tests/test_compliance_guardrails.py ...                                  [ 41%]
+tests/test_end_to_end_pipeline.py ............                           [ 71%]
+tests/test_visa_ce3.py ...                                               [ 79%]
+tests/test_webhook_security.py ........                                  [100%]
+
+=============================== tests coverage ================================
+Coverage: 88% across 1,486 statements
+============================= 39 passed in 3.76s ==============================
 ```
 
 ---
 
-## 6. API Reference & Sample cURL Requests
+## 6. Key API Operations
 
-### 1. Ingest PayPal Webhook
+### 1. Ingest Pre-Chargeback Alert (Ethoca / Verifi)
 ```bash
-curl -X POST http://localhost:8000/api/v1/paypal/webhook \
+curl -X POST http://localhost:8000/api/v1/alerts/webhook \
   -H "Content-Type: application/json" \
-  -H "PAYPAL-AUTH-ALGO: SHA256withRSA" \
-  -H "PAYPAL-TRANSMISSION-ID: TRANS-98214" \
-  -H "PAYPAL-CERT-URL: https://api.paypal.com/cert.pem" \
-  -H "PAYPAL-TRANSMISSION-SIG: <base64_sig>" \
-  -H "PAYPAL-TRANSMISSION-TIME: 2026-10-18T12:00:00Z" \
   -d '{
-    "id": "WH-EVT-001",
-    "event_version": "1.0",
-    "create_time": "2026-10-18T12:00:00Z",
-    "resource_type": "dispute",
-    "event_type": "CUSTOMER.DISPUTE.CREATED",
-    "resource": {
-      "dispute_id": "PP-D-7701",
-      "create_time": "2026-10-18T11:55:00Z",
-      "dispute_stage": "CLAIM",
-      "dispute_reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
-      "status": "WAITING_FOR_SELLER_RESPONSE",
-      "dispute_amount": { "currency_code": "USD", "value": "199.00" },
-      "disputed_transactions": [{
-        "seller_transaction_id": "TXN-7701",
-        "invoice_number": "ORD-7701",
-        "gross_amount": { "currency_code": "USD", "value": "199.00" }
-      }]
+    "alert_id": "ALT-ETH-8821",
+    "network": "ETHOCA",
+    "arn": "ARN-9988221100",
+    "transaction_id": "TXN-7701",
+    "amount": 199.00,
+    "currency": "USD",
+    "card_last4": "4242"
+  }'
+```
+
+### 2. Onboard Tenant with BYOK Credentials & Custom Rules
+```bash
+curl -X POST http://localhost:8000/api/v1/tenants \
+  -H "Content-Type: application/json" \
+  -d '{
+    "merchant_id": "merchant-acme",
+    "name": "ACME E-Commerce",
+    "paypal_client_id": "client_acme_123",
+    "paypal_client_secret": "secret_acme_456",
+    "paypal_webhook_id": "wh_acme_789",
+    "custom_rules": {
+      "hitl_order_value_threshold": 150.00,
+      "defend_p_win_threshold": 0.75,
+      "visa_ce3_enabled": true,
+      "alert_auto_refund_enabled": true
     }
   }'
 ```
 
-### 2. Check Dispute Analytics & Avoided Fees
+### 3. Generate Prepaid RMA Return Label
 ```bash
-curl -X GET http://localhost:8000/api/v1/disputes/stats/summary
-```
-**Response:**
-```json
-{
-  "total_disputes": 4,
-  "defended_count": 2,
-  "conceded_count": 1,
-  "de_escalated_count": 1,
-  "hitl_queue_count": 0,
-  "total_disputed_amount": 1098.00,
-  "total_expected_value": 724.50,
-  "estimated_dispute_fees_avoided": 45.00,
-  "average_win_probability": 0.765
-}
-```
-
-### 3. Inspect HITL Review Queue
-```bash
-curl -X GET http://localhost:8000/api/v1/disputes/hitl/queue
-```
-
-### 4. Submit Human Override for a Flagged Dispute
-```bash
-curl -X POST http://localhost:8000/api/v1/disputes/PP-D-HITL-5501/hitl/override \
+curl -X POST http://localhost:8000/api/v1/rma/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "reviewer_id": "OPERATOR_ALICE",
-    "action": "DEFEND",
-    "override_reason": "Confirmed signature and matched packing scale telemetry with GPS proof."
+    "order_id": "ORD-7701",
+    "dispute_id": "PP-D-7701",
+    "customer_name": "Taylor Ray"
   }'
-```
-
-### 5. Download Evidentiary Rebuttal PDF Dossier
-```bash
-curl -X GET http://localhost:8000/api/v1/disputes/PP-D-7701/pdf --output dispute_7701_evidence.pdf
 ```

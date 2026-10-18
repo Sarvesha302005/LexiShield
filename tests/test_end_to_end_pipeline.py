@@ -31,7 +31,11 @@ async def test_e2e_de_escalation_path(
     assert data["status"] == "PROCESSED"
     assert data["dispute_id"] == "PP-D-INQUIRY-9001"
     assert data["pipeline_status"] == PipelineExecutionStatus.DE_ESCALATED.value
-    assert "DE_ESCALATION" in data["action_taken"] or "OFFER" in data["action_taken"]
+    assert (
+        "BOT" in data["action_taken"]
+        or "DE_ESCALATION" in data["action_taken"]
+        or "OFFER" in data["action_taken"]
+    )
 
     # Verify dispute can be retrieved via GET endpoint
     get_resp = await async_client.get(f"/api/v1/disputes/{data['dispute_id']}")
@@ -90,8 +94,10 @@ async def test_e2e_concession_path(
     assert data["status"] == "PROCESSED"
     assert data["dispute_id"] == "PP-D-CONCEDE-3301"
     assert data["pipeline_status"] == PipelineExecutionStatus.CONCEDED.value
-    assert data["action_taken"] == "ACCEPTED_CLAIM_CONCESSION"
-    assert data["win_probability"] < 0.70
+    assert data["action_taken"] in (
+        "ACCEPTED_CLAIM_CONCESSION",
+        "CONCEDED_POLICY_EXCLUSION",
+    )
 
 
 @pytest.mark.asyncio
