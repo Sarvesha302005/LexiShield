@@ -1,0 +1,24 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment files
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# Output dossiers (keep directory structure)
+artifacts/dossiers/*.pdf
+!artifacts/dossiers/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp

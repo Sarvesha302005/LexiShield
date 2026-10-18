@@ -1,0 +1,37 @@
+services:
+  dispute-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paypal_dispute_engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - PAYPAL_MODE=${PAYPAL_MODE:-sandbox}
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID:-mock_paypal_client_id}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET:-mock_paypal_client_secret}
+      - PAYPAL_WEBHOOK_ID=${PAYPAL_WEBHOOK_ID:-mock_paypal_webhook_id}
+      - PAYPAL_API_BASE_URL=${PAYPAL_API_BASE_URL:-https://api-m.sandbox.paypal.com}
+      - STRICT_WEBHOOK_VERIFICATION=${STRICT_WEBHOOK_VERIFICATION:-true}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-mock_gemini_api_key}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-pro}
+      - STANDARD_DISPUTE_FEE=${STANDARD_DISPUTE_FEE:-15.00}
+      - HIGH_VOLUME_DISPUTE_FEE=${HIGH_VOLUME_DISPUTE_FEE:-30.00}
+      - DEFEND_P_WIN_THRESHOLD=${DEFEND_P_WIN_THRESHOLD:-0.70}
+      - HITL_ORDER_VALUE_THRESHOLD=${HITL_ORDER_VALUE_THRESHOLD:-300.00}
+      - HITL_P_WIN_LOWER=${HITL_P_WIN_LOWER:-0.60}
+      - HITL_P_WIN_UPPER=${HITL_P_WIN_UPPER:-0.75}
+    volumes:
+      - ./artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
