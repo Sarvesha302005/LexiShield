@@ -1,0 +1,30 @@
+name: "💡 Feature Proposal"
+description: "Suggest a new compliance rule, card network adapter, or ERP integration"
+title: "[FEAT]: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: "Have an idea for a new defense rule, dispute automation, or integration? Let us know below!"
+  - type: input
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: A brief 1-sentence summary of the proposed enhancement.
+      placeholder: "e.g., Support Mastercard CE 2.0 liability shift rules"
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Problem & Commercial Motivation
+      description: What merchant problem or policy requirement does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Implementation
+      description: Technical details or API designs for how this could be implemented.
+    validations:
+      required: true

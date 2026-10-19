@@ -1,0 +1,56 @@
+name: "🐛 Bug Report"
+description: "File a bug or unexpected behavior in the dispute defense engine"
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for reporting an issue in LexiShield! Please provide as much detail as possible to help us reproduce and resolve it."
+  - type: input
+    id: version
+    attributes:
+      label: LexiShield Version
+      description: What version of LexiShield are you running?
+      placeholder: "e.g., v2.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      options:
+        - Webhook Security & Ingestion
+        - PayPal Dispute REST API Client
+        - Seller Protection Compliance Rules ($750 / AVS)
+        - Visa Compelling Evidence 3.0 Engine
+        - Pre-Chargeback Deflection (Ethoca/Verifi)
+        - Inquiry Settlement Bot
+        - AG Grid Workstation / Dashboard UI
+        - ERP Accounting / RMA Logistics
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps or payload to reproduce the behavior.
+      placeholder: |
+        1. Ingest PayPal webhook with amount $800
+        2. Set signature_required: false
+        3. Check arbitration decision
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true

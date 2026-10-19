@@ -3,10 +3,12 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2.8+-e92063.svg)](https://docs.pydantic.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![AG Grid](https://img.shields.io/badge/AG%20Grid-Enterprise%20Workstation-007ACC.svg)](https://www.ag-grid.com/)
 [![Postman](https://img.shields.io/badge/Postman-Verified%20Collection-FF6C37.svg)](https://www.postman.com/)
 [![Render](https://img.shields.io/badge/Render-Blueprint%20IaC-46E3B7.svg)](https://render.com/)
 [![CI Pipeline](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml)
+[![CodeQL Security](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml)
 [![Docker Build](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml)
 [![Tests](https://img.shields.io/badge/Tests-39%20Passed%20(88%25%20cov)-brightgreen.svg)]()
 

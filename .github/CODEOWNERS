@@ -1,0 +1,12 @@
+# Global Codeowners for LexiShield
+* @Sarvesha302005
+
+# Critical Security & Cryptography Boundaries
+/src/core/security.py @Sarvesha302005
+/src/services/compliance.py @Sarvesha302005
+/src/services/visa_ce3.py @Sarvesha302005
+
+# Infrastructure & CI/CD
+/.github/workflows/ @Sarvesha302005
+/Dockerfile @Sarvesha302005
+/render.yaml @Sarvesha302005
