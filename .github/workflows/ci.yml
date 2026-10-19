@@ -5,20 +5,10 @@ on:
     branches:
       - main
       - develop
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - '.github/workflows/ci.yml'
   pull_request:
     branches:
       - main
       - develop
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 permissions:
