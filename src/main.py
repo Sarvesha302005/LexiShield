@@ -12,7 +12,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.staticfiles import StaticFiles
 
 from src.api.v1 import api_v1_router
 from src.core.config import get_settings
@@ -136,8 +137,31 @@ async def health_check() -> dict[str, str]:
     }
 
 
+# Static Files Directory
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 @app.get("/", tags=["System"])
-async def root() -> dict[str, str]:
+async def root(request: Request):
+    """
+    Root Web Entrypoint:
+    Serves the LexiShield Web Application if accessed via browser,
+    or JSON metadata if requested via API client.
+    """
+    accept_header = request.headers.get("accept", "")
+    if "application/json" in accept_header and "text/html" not in accept_header:
+        return {
+            "message": "PayPal Automated Dispute Resolution Engine is active.",
+            "docs": "/docs",
+            "api_v1": settings.API_V1_STR,
+        }
+
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+
     return {
         "message": "PayPal Automated Dispute Resolution Engine is active.",
         "docs": "/docs",

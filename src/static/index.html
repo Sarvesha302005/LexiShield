@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LexiShield | Enterprise PayPal & Card Dispute Defense Engine</title>
+  <meta name="description" content="Autonomous AI dispute defense, Visa CE 3.0 liability shift engine, Ethoca/Verifi pre-chargeback deflection, and multi-tenant e-commerce financial protection.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="lexi-theme">
+  <!-- Top Navigation Header -->
+  <header class="app-header" id="appHeader">
+    <div class="header-left">
+      <div class="brand-container">
+        <div class="brand-shield-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="shield-pulse"></span>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">LEXI<span>SHIELD</span></div>
+          <div class="brand-badge">DEFENSE SYSTEM v2.4</div>
+        </div>
+      </div>
+      <div class="system-status-indicator">
+        <span class="status-dot pulsing"></span>
+        <span class="status-label">DEFENSE RADAR ACTIVE</span>
+        <span class="engine-mode-pill" id="engineModePill">PAYPAL LIVE SANDBOX</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="tenant-selector-group">
+        <label for="tenantSelect" class="tenant-label">MERCHANT TENANT:</label>
+        <select id="tenantSelect" class="tenant-dropdown" onchange="window.switchTenant(this.value)">
+          <option value="all">Global (All Tenants)</option>
+          <option value="merchant_alpha_retail" selected>Acme Global Retail (BYOK)</option>
+          <option value="merchant_luxury_goods">Apex Luxury Brands</option>
+          <option value="merchant_digital_saas">CloudWorks Digital Services</option>
+        </select>
+      </div>
+
+      <div class="header-quick-actions">
+        <button class="btn btn-outline" id="btnEthocaDeflect" onclick="window.openDeflectionModal()">
+          <span class="btn-icon">⚡</span> Deflect Alert
+        </button>
+        <button class="btn btn-primary" id="btnSimulateDispute" onclick="window.openDisputeModal()">
+          <span class="btn-icon">🛡️</span> Ingest Dispute
+        </button>
+        <a href="/docs" target="_blank" class="btn btn-ghost" title="API Swagger Documentation">
+          <span class="btn-icon">📖</span> API Docs
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-main" id="mainContainer">
+    <!-- Top Executive KPI Glow Row -->
+    <section class="kpi-banner-grid" id="kpiBanner">
+      <div class="kpi-card glow-cyan">
+        <div class="kpi-header">
+          <span class="kpi-title">TOTAL PROTECTED GMV</span>
+          <span class="kpi-icon">💰</span>
+        </div>
+        <div class="kpi-value" id="kpiGmv">$1,482,900</div>
+        <div class="kpi-meta"><span class="positive-trend">↑ 100%</span> Coverage under Seller Protection</div>
+      </div>
+
+      <div class="kpi-card glow-emerald">
+        <div class="kpi-header">
+          <span class="kpi-title">DEFENSE WIN PROBABILITY P(WIN)</span>
+          <span class="kpi-icon">🎯</span>
+        </div>
+        <div class="kpi-value" id="kpiWinRate">94.8%</div>
+        <div class="kpi-meta"><span class="positive-trend">+18.2%</span> vs unassisted e-commerce avg</div>
+      </div>
+
+      <div class="kpi-card glow-amber">
+        <div class="kpi-header">
+          <span class="kpi-title">PRE-CHARGEBACK DEFLECTIONS</span>
+          <span class="kpi-icon">⚡</span>
+        </div>
+        <div class="kpi-value" id="kpiDeflections">342 Alerts</div>
+        <div class="kpi-meta"><span class="highlight-val">$10,260</span> saved in PayPal dispute fees</div>
+      </div>
+
+      <div class="kpi-card glow-purple">
+        <div class="kpi-header">
+          <span class="kpi-title">VISA CE 3.0 LIABILITY SHIFTS</span>
+          <span class="kpi-icon">💳</span>
+        </div>
+        <div class="kpi-value" id="kpiCe3Shift">189 Orders</div>
+        <div class="kpi-meta">2-Factor Match Verified (IP + Device)</div>
+      </div>
+
+      <div class="kpi-card glow-crimson">
+        <div class="kpi-header">
+          <span class="kpi-title">HITL TRIAGE QUEUE</span>
+          <span class="kpi-icon">⚠️</span>
+        </div>
+        <div class="kpi-value" id="kpiHitlQueue">1 Pending</div>
+        <div class="kpi-meta">High-value & borderline arbitration cases</div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs Bar -->
+    <nav class="nav-tabs-bar" id="navTabs">
+      <button class="nav-tab active" data-tab="tabDisputes" onclick="window.switchTab('tabDisputes')">
+        <span class="tab-icon">🛡️</span> Live Dispute Radar
+      </button>
+      <button class="nav-tab" data-tab="tabCe3" onclick="window.switchTab('tabCe3')">
+        <span class="tab-icon">💳</span> Visa CE 3.0 Engine
+      </button>
+      <button class="nav-tab" data-tab="tabDeflection" onclick="window.switchTab('tabDeflection')">
+        <span class="tab-icon">⚡</span> Ethoca / Verifi Alert Deflection
+      </button>
+      <button class="nav-tab" data-tab="tabBot" onclick="window.switchTab('tabBot')">
+        <span class="tab-icon">💬</span> Inquiry Settlement Bot
+      </button>
+      <button class="nav-tab" data-tab="tabRma" onclick="window.switchTab('tabRma')">
+        <span class="tab-icon">📦</span> RMA Returns & Labels
+      </button>
+      <button class="nav-tab" data-tab="tabTenants" onclick="window.switchTab('tabTenants')">
+        <span class="tab-icon">🏢</span> Multi-Tenant & ERP Accounting
+      </button>
+    </nav>
+
+    <!-- Tab 1: Live Dispute Radar -->
+    <section class="tab-content active" id="tabDisputes">
+      <div class="section-toolbar">
+        <div class="toolbar-search">
+          <input type="text" id="disputeSearchInput" placeholder="Filter by Dispute ID, Customer, Tracking, or Amount..." oninput="window.filterDisputes()">
+        </div>
+        <div class="toolbar-filters">
+          <select id="filterStage" class="filter-select" onchange="window.filterDisputes()">
+            <option value="ALL">All Stages (Inquiry & Claim)</option>
+            <option value="INQUIRY">INQUIRY (Pre-Arbitration)</option>
+            <option value="CLAIM">CLAIM (PayPal Arbitrated)</option>
+          </select>
+          <select id="filterStatus" class="filter-select" onchange="window.filterDisputes()">
+            <option value="ALL">All Action Statuses</option>
+            <option value="DEFENDED">DEFENDED (Evidence Submitted)</option>
+            <option value="CONCEDED">CONCEDED (Policy / Fee Avoided)</option>
+            <option value="FLAGGED_HITL">FLAGGED_HITL (Needs Review)</option>
+            <option value="RESOLVED">RESOLVED</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="window.refreshDisputes()">
+            <span class="btn-icon">🔄</span> Sync
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Disputes Grid -->
+      <div class="disputes-grid" id="disputesGrid">
+        <!-- Rendered dynamically via JavaScript -->
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <span>Syncing dispute telemetry from PayPal API & local pipeline...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Visa Compelling Evidence 3.0 Engine -->
+    <section class="tab-content" id="tabCe3">
+      <div class="card-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Visa Compelling Evidence 3.0 (CE 3.0) Evaluation Lab</h2>
+            <p class="panel-subtitle">Network Rule 10.4 (Card-Not-Present Fraud): Shifts chargeback liability away from the merchant upon proving $\ge 2$ prior undisputed orders with 2-Factor technical matching.</p>
+          </div>
+          <span class="badge badge-purple">VISA CERTIFIED 3.0</span>
+        </div>
+
+        <div class="ce3-grid">
+          <!-- Interactive CE 3.0 Verification Form -->
+          <div class="ce3-card form-box">
+            <h3 class="box-title">Simulate Order Against Customer Ledger</h3>
+            <div class="form-group">
+              <label>Customer Identifier (ID / Email)</label>
+              <input type="text" id="ce3CustomerId" value="CUST-ELITE-994" class="form-control">
+            </div>
+            <div class="form-row">
+              <div class="form-group col-6">
+                <label>Disputed Order Amount ($)</label>
+                <input type="number" id="ce3Amount" value="389.00" class="form-control">
+              </div>
+              <div class="form-group col-6">
+                <label>Checkout IP Address</label>
+                <input type="text" id="ce3Ip" value="198.51.100.44" class="form-control">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-6">
+                <label>Device Fingerprint Hash</label>
+                <input type="text" id="ce3Device" value="fp_884920b784a9" class="form-control">
+              </div>
+              <div class="form-group col-6">
+                <label>Shipping Address Token</label>
+                <input type="text" id="ce3Address" value="742 Evergreen Terr, Springfield OR" class="form-control">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="window.runCe3Check()">
+              Run Visa CE 3.0 Qualification Engine
+            </button>
+          </div>
+
+          <!-- CE 3.0 Result & Liability Shift Attestation -->
+          <div class="ce3-card result-box" id="ce3ResultBox">
+            <h3 class="box-title">Liability Shift Analysis</h3>
+            <div class="ce3-status-badge qualified" id="ce3Badge">QUALIFIED FOR AUTOMATED LIABILITY SHIFT</div>
+            <div class="ce3-metrics-row">
+              <div class="metric-pill">
+                <span class="metric-label">Historical Lookback</span>
+                <span class="metric-val" id="ce3Lookback">180 & 270 Days Ago (120-365d Window)</span>
+              </div>
+              <div class="metric-pill">
+                <span class="metric-label">Prior Chargebacks</span>
+                <span class="metric-val text-green" id="ce3PriorDisputes">0 Disputes (Undisputed Ledger)</span>
+              </div>
+              <div class="metric-pill">
+                <span class="metric-label">Technical Factor Match</span>
+                <span class="metric-val text-cyan" id="ce3TechMatch">IP Address & Device Fingerprint</span>
+              </div>
+            </div>
+            <div class="ce3-statement-box" id="ce3Statement">
+              "Under Visa Core Rules Section 10.4.1 (Compelling Evidence 3.0), liability for this dispute is shifted to the card issuer. The merchant has provided two prior undisputed qualifying transactions occurring within 120-365 days of the disputed purchase date, matching on core technical credentials (IP address 198.51.100.44 and Device Fingerprint fp_884920b784a9)."
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Ethoca / Verifi Alert Deflection -->
+    <section class="tab-content" id="tabDeflection">
+      <div class="card-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Pre-Chargeback Deflection Stream (Ethoca & Verifi RDR)</h2>
+            <p class="panel-subtitle">Card issuers notify merchants 20-72 hours before chargebacks post. Automated zero-fee refunds satisfy alerts, saving $15-$30 dispute fees and maintaining a 0% dispute ratio.</p>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="window.openDeflectionModal()">
+            + Inject Synthetic Alert Webhook
+          </button>
+        </div>
+
+        <div class="deflection-feed" id="deflectionFeed">
+          <!-- Deflection entries rendered here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Inquiry Settlement Bot -->
+    <section class="tab-content" id="tabBot">
+      <div class="card-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Inquiry Stage Conversational Settlement Bot</h2>
+            <p class="panel-subtitle">Multi-turn autonomous buyer negotiation via <code>POST /v1/customer/disputes/{id}/send-message</code> prior to formal PayPal arbitration.</p>
+          </div>
+          <span class="badge badge-cyan">3-STEP RESOLUTION LADDER</span>
+        </div>
+
+        <div class="bot-chat-container">
+          <div class="bot-sidebar">
+            <h3 class="box-title">Active Inquiry Conversations</h3>
+            <div class="inquiry-item active" onclick="window.selectInquiryChat('PP-D-INQ-4401')">
+              <div class="inquiry-id">PP-D-INQ-4401</div>
+              <div class="inquiry-meta">Customer: Sarah Jenkins • $89.50</div>
+              <div class="inquiry-status">Step 2: 20% Refund Offer</div>
+            </div>
+            <div class="inquiry-item" onclick="window.selectInquiryChat('PP-D-INQ-7822')">
+              <div class="inquiry-id">PP-D-INQ-7822</div>
+              <div class="inquiry-meta">Customer: David Chen • $215.00</div>
+              <div class="inquiry-status">Step 1: Tracking Dispatched</div>
+            </div>
+          </div>
+
+          <div class="bot-chat-window">
+            <div class="chat-header">
+              <div class="chat-title" id="chatTitle">Negotiation Session: PP-D-INQ-4401 (Sarah Jenkins)</div>
+              <div class="chat-actions">
+                <button class="btn btn-outline btn-sm" onclick="window.advanceBotTurn()">Simulate Buyer Response</button>
+              </div>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+              <!-- Chat bubbles rendered here -->
+            </div>
+            <div class="chat-input-bar">
+              <input type="text" id="chatManualInput" placeholder="Intervene manually as customer service agent..." class="form-control">
+              <button class="btn btn-primary" onclick="window.sendManualBotMessage()">Send to PayPal</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 5: RMA Returns & Labels -->
+    <section class="tab-content" id="tabRma">
+      <div class="card-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Automated RMA (Return Merchandise Authorization) Hub</h2>
+            <p class="panel-subtitle">Automates prepaid carrier return shipping labels via EasyPost/Shippo and monitors carrier inbound delivery scans before issuing concession refunds.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="window.openRmaModal()">
+            + Generate Prepaid Return Label
+          </button>
+        </div>
+
+        <div class="rma-grid" id="rmaGrid">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 6: Multi-Tenant & ERP Accounting -->
+    <section class="tab-content" id="tabTenants">
+      <div class="card-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Multi-Tenant Platform & ERP Double-Entry Accounting</h2>
+            <p class="panel-subtitle">PostgreSQL Row-Level Security (RLS) simulation, Bring-Your-Own-Credentials (BYOK), and NetSuite/QuickBooks ledger synchronization.</p>
+          </div>
+          <span class="badge badge-emerald">RLS ENFORCED</span>
+        </div>
+
+        <div class="tenant-erp-grid">
+          <!-- Tenant Credentials & Custom Rules Card -->
+          <div class="ce3-card">
+            <h3 class="box-title">Tenant BYOK Configuration</h3>
+            <div class="form-group">
+              <label>Merchant Name</label>
+              <input type="text" id="tenantName" value="Acme Global Retail Inc." class="form-control">
+            </div>
+            <div class="form-row">
+              <div class="form-group col-6">
+                <label>PayPal Client ID</label>
+                <input type="password" value="PAYPAL_CLIENT_ID_SECURE_VAULT_KEY_784" class="form-control">
+              </div>
+              <div class="form-group col-6">
+                <label>Webhook Listener Key</label>
+                <input type="password" value="WH_LISTENER_KEY_9921_VAULT" class="form-control">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-6">
+                <label>HITL Review Threshold ($)</label>
+                <input type="number" id="tenantHitlThreshold" value="250.00" class="form-control">
+              </div>
+              <div class="form-group col-6">
+                <label>Auto-Defense Win Cutoff P(win)</label>
+                <input type="number" step="0.05" id="tenantWinCutoff" value="0.75" class="form-control">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="alert('Tenant rules updated successfully in PostgreSQL RLS registry!')">
+              Save Merchant Configuration
+            </button>
+          </div>
+
+          <!-- Double Entry Accounting Ledger Stream -->
+          <div class="ce3-card">
+            <h3 class="box-title">ERP Double-Entry General Ledger Stream</h3>
+            <div class="accounting-ledger" id="accountingLedger">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Dispute Detail & Telemetry Modal -->
+  <div class="modal-overlay" id="disputeDetailModal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <div class="modal-title" id="modalDisputeTitle">Dispute Dossier: PP-D-7701</div>
+        <button class="modal-close" onclick="window.closeDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalDisputeBody">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="modal-footer" id="modalDisputeFooter">
+        <!-- Action buttons rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Simulate Dispute Ingestion Modal -->
+  <div class="modal-overlay" id="simulateDisputeModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">Simulate PayPal Webhook Intake</div>
+        <button class="modal-close" onclick="window.closeSimulateModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">Simulate an incoming <code>CUSTOMER.DISPUTE.CREATED</code> webhook with custom attributes to test compliance rules and Gemini 1.5 arbitration.</p>
+        <div class="form-group">
+          <label>Scenario Preset</label>
+          <select id="simScenario" class="form-control" onchange="window.applyScenarioPreset(this.value)">
+            <option value="custom">Custom Configuration</option>
+            <option value="sig_mandate_fail">$750+ Signature Mandate Violation (Cap P_win & Concede)</option>
+            <option value="ce3_liability_shift">Visa CE 3.0 Card Chargeback (Liability Shift Won)</option>
+            <option value="hitl_high_value">High Value $450 Borderline Claim (Triggers HITL Queue)</option>
+            <option value="inquiry_ladder">Inquiry Stage Item Not Received (Triggers Settlement Bot)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label>Dispute ID</label>
+            <input type="text" id="simDisputeId" value="PP-D-SIM-101" class="form-control">
+          </div>
+          <div class="form-group col-6">
+            <label>Amount ($)</label>
+            <input type="number" id="simAmount" value="785.00" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label>Dispute Stage</label>
+            <select id="simStage" class="form-control">
+              <option value="CLAIM">CLAIM (PayPal Arbitrated)</option>
+              <option value="INQUIRY">INQUIRY (Direct Negotiation)</option>
+            </select>
+          </div>
+          <div class="form-group col-6">
+            <label>Reason Code</label>
+            <select id="simReason" class="form-control">
+              <option value="MERCHANDISE_OR_SERVICE_NOT_RECEIVED">Item Not Received (INR)</option>
+              <option value="MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED">Not As Described (SNAD)</option>
+              <option value="UNAUTHORISED">Unauthorized Transaction</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Carrier Signature Required?</label>
+          <select id="simSigReq" class="form-control">
+            <option value="false">No Signature (Violates $750+ Mandate if Amount >= $750)</option>
+            <option value="true">Signature Required and Confirmed</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="window.closeSimulateModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="window.submitSimulatedDispute()">Process Dispute Through Defense Engine</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pre-Chargeback Deflection Modal -->
+  <div class="modal-overlay" id="deflectionModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">Trigger Ethoca / Verifi Alert</div>
+        <button class="modal-close" onclick="window.closeDeflectionModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">Inject an early card network alert (Ethoca Consumer Clarity / Verifi RDR) and trigger an automated zero-fee transaction refund to prevent dispute fees.</p>
+        <div class="form-group">
+          <label>Alert Provider Network</label>
+          <select id="alertNetwork" class="form-control">
+            <option value="ETHOCA">Ethoca Consumer Clarity</option>
+            <option value="VERIFI_RDR">Verifi Rapid Dispute Resolution (RDR)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label>Order ID / Transaction Ref</label>
+            <input type="text" id="alertOrderRef" value="ORD-PRE-8821" class="form-control">
+          </div>
+          <div class="form-group col-6">
+            <label>Alert Amount ($)</label>
+            <input type="number" id="alertAmount" value="142.50" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Reason Code Description</label>
+          <input type="text" id="alertReason" value="Cardholder does not recognize recurring charge" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="window.closeDeflectionModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="window.submitDeflectionAlert()">Trigger Zero-Fee Deflection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Center -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
