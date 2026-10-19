@@ -8,6 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- AG Grid Community (Sponsor Integration) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.2.0/styles/ag-grid.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@32.2.0/styles/ag-theme-quartz.css">
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.2.0/dist/ag-grid-community.min.js"></script>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="lexi-theme">
@@ -150,14 +154,28 @@
             <option value="FLAGGED_HITL">FLAGGED_HITL (Needs Review)</option>
             <option value="RESOLVED">RESOLVED</option>
           </select>
+          <div class="view-switch-group">
+            <button class="btn btn-secondary btn-sm active" id="btnViewAgGrid" onclick="window.setDisputesView('aggrid')" title="Enterprise AG Grid Workstation">
+              <span class="btn-icon">📊</span> AG Grid
+            </button>
+            <button class="btn btn-outline btn-sm" id="btnViewCards" onclick="window.setDisputesView('cards')" title="Executive Cards View">
+              <span class="btn-icon">🎴</span> Cards
+            </button>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="window.exportAgGridCsv()" title="Export Filtered Disputes to CSV via AG Grid">
+            <span class="btn-icon">📥</span> Export CSV
+          </button>
           <button class="btn btn-secondary btn-sm" onclick="window.refreshDisputes()">
             <span class="btn-icon">🔄</span> Sync
           </button>
         </div>
       </div>
 
-      <!-- Live Disputes Grid -->
-      <div class="disputes-grid" id="disputesGrid">
+      <!-- AG Grid Enterprise Dispute Workstation Container (Sponsor Integration) -->
+      <div id="agGridContainer" class="ag-theme-quartz-dark ag-grid-disputes-container" style="height: 520px; width: 100%; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1.5rem;"></div>
+
+      <!-- Live Disputes Card Grid (Alternative View) -->
+      <div class="disputes-grid" id="disputesGrid" style="display: none;">
         <!-- Rendered dynamically via JavaScript -->
         <div class="loading-state">
           <div class="spinner"></div>

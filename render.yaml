@@ -1,0 +1,39 @@
+# Render Infrastructure-as-Code Blueprint
+# LexiShield Enterprise PayPal Dispute Resolution & Defense System
+# Documentation: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: lexishield-paypal-defense-engine
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    region: oregon
+    branch: main
+    healthCheckPath: /health
+    autoDeploy: true
+
+    disk:
+      name: dossier-artifacts
+      mountPath: /app/artifacts
+      sizeGB: 10
+
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PAYPAL_MODE
+        value: sandbox
+      - key: API_V1_STR
+        value: /api/v1
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

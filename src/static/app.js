@@ -10,6 +10,8 @@
   let disputes = [];
   let currentFilter = { stage: 'ALL', status: 'ALL', search: '' };
   let currentTenant = 'all';
+  let gridApi = null;
+  let currentView = 'aggrid';
 
   // Initial Seed Data for immediate interactive showcase
   const defaultDisputes = [
@@ -244,6 +246,7 @@
   // Initialize
   async function init() {
     await fetchDisputesFromBackend();
+    initAgGrid();
     renderDisputes();
     renderDeflectionFeed();
     renderRmaGrid();
@@ -271,12 +274,9 @@
     disputes = defaultDisputes;
   }
 
-  // Render Disputes Card Grid
-  function renderDisputes() {
-    const grid = document.getElementById('disputesGrid');
-    if (!grid) return;
-
-    let filtered = disputes.filter(d => {
+  // Filter calculation helper
+  function getFilteredDisputes() {
+    return disputes.filter(d => {
       if (currentTenant !== 'all' && d.merchant_id && d.merchant_id !== currentTenant) {
         return false;
       }
@@ -293,6 +293,175 @@
       }
       return true;
     });
+  }
+
+  // Initialize Enterprise AG Grid Workstation (Sponsor Tool Integration)
+  function initAgGrid() {
+    const eGridDiv = document.querySelector('#agGridContainer');
+    if (!eGridDiv || typeof agGrid === 'undefined' || gridApi) return;
+
+    const columnDefs = [
+      {
+        field: 'dispute_id',
+        headerName: 'Dispute ID',
+        width: 180,
+        pinned: 'left',
+        cellRenderer: (params) => {
+          return `<span style="color: var(--color-cyan); font-family: var(--font-mono); font-weight: 700; cursor: pointer;" onclick="window.inspectDispute('${params.value}')">🛡️ ${params.value}</span>`;
+        }
+      },
+      {
+        field: 'merchant_id',
+        headerName: 'Tenant Merchant',
+        width: 170,
+        cellRenderer: (params) => {
+          const name = params.value || 'merchant_alpha_retail';
+          return `<span style="font-size: 0.78rem; color: var(--text-muted);">${name.replace(/_/g, ' ')}</span>`;
+        }
+      },
+      {
+        field: 'stage',
+        headerName: 'Stage',
+        width: 120,
+        cellRenderer: (params) => {
+          const isClaim = params.value === 'CLAIM';
+          return isClaim 
+            ? '<span class="dispute-stage-pill stage-claim">CLAIM</span>' 
+            : '<span class="dispute-stage-pill stage-inquiry">INQUIRY</span>';
+        }
+      },
+      {
+        field: 'reason',
+        headerName: 'Dispute Reason',
+        width: 210,
+        valueFormatter: (params) => (params.value || '').replace(/_/g, ' ')
+      },
+      {
+        field: 'amount',
+        headerName: 'Amount',
+        width: 120,
+        type: 'numericColumn',
+        cellRenderer: (params) => {
+          return `<span style="font-family: var(--font-mono); font-weight: 700; color: #fff;">$${(params.value || 0).toFixed(2)}</span>`;
+        }
+      },
+      {
+        field: 'win_probability',
+        headerName: 'P(win) Probability',
+        width: 160,
+        cellRenderer: (params) => {
+          const val = params.value !== null && params.value !== undefined ? Math.round(params.value * 100) : 75;
+          const color = val >= 75 ? 'var(--color-emerald)' : (val >= 50 ? 'var(--color-amber)' : 'var(--color-crimson)');
+          return `<div style="display:flex; align-items:center; gap:8px;">
+            <strong style="color: ${color}; font-family: var(--font-mono); width: 34px;">${val}%</strong>
+            <div style="flex:1; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+              <div style="height:100%; width:${val}%; background:${color};"></div>
+            </div>
+          </div>`;
+        }
+      },
+      {
+        field: 'expected_value',
+        headerName: 'Expected Value E[V]',
+        width: 150,
+        type: 'numericColumn',
+        valueFormatter: (params) => `$${(params.value || 0).toFixed(2)}`
+      },
+      {
+        field: 'compliance_eligible',
+        headerName: 'Protection Guardrails',
+        width: 190,
+        cellRenderer: (params) => {
+          const row = params.data;
+          if (row.compliance_eligible === false) {
+            return '<span class="badge badge-crimson">⚠️ POLICY VOID</span>';
+          }
+          if (row.visa_ce3_qualified) {
+            return '<span class="badge badge-purple">⚡ VISA CE 3.0</span>';
+          }
+          return '<span class="badge badge-emerald">✓ SELLER PROTECTED</span>';
+        }
+      },
+      {
+        field: 'pipeline_status',
+        headerName: 'Action Status',
+        width: 150,
+        cellRenderer: (params) => {
+          const row = params.data;
+          if (row.hitl_flagged) {
+            return '<span class="badge badge-amber">⚠️ HITL REVIEW</span>';
+          }
+          if (params.value === 'DEFENDED') {
+            return '<span class="badge badge-cyan">✓ DEFENDED</span>';
+          }
+          if (params.value === 'CONCEDED') {
+            return '<span class="badge badge-crimson">CONCEDED</span>';
+          }
+          return `<span class="badge badge-secondary">${params.value || 'PENDING'}</span>`;
+        }
+      },
+      {
+        headerName: 'Actions',
+        width: 170,
+        pinned: 'right',
+        cellRenderer: (params) => {
+          const row = params.data;
+          if (row.hitl_flagged) {
+            return `<button class="btn btn-primary btn-sm" onclick="window.inspectDispute('${row.dispute_id}')">⚖️ Triage</button>`;
+          }
+          if (row.pdf_dossier_path) {
+            return `<a href="/api/v1/disputes/${row.dispute_id}/pdf" target="_blank" class="btn btn-secondary btn-sm">📄 PDF</a>`;
+          }
+          return `<button class="btn btn-outline btn-sm" onclick="window.inspectDispute('${row.dispute_id}')">🔍 Inspect</button>`;
+        }
+      }
+    ];
+
+    const gridOptions = {
+      columnDefs: columnDefs,
+      rowData: getFilteredDisputes(),
+      pagination: true,
+      paginationPageSize: 10,
+      paginationPageSizeSelector: [10, 25, 50],
+      rowHeight: 48,
+      headerHeight: 42,
+      animateRows: true,
+      enableCellTextSelection: true,
+      defaultColDef: {
+        sortable: true,
+        filter: true,
+        resizable: true,
+      }
+    };
+
+    if (typeof agGrid.createGrid === 'function') {
+      gridApi = agGrid.createGrid(eGridDiv, gridOptions);
+    } else if (typeof agGrid.Grid === 'function') {
+      new agGrid.Grid(eGridDiv, gridOptions);
+      gridApi = gridOptions.api;
+    }
+  }
+
+  function refreshAgGridData() {
+    if (!gridApi) {
+      initAgGrid();
+      return;
+    }
+    const filtered = getFilteredDisputes();
+    if (typeof gridApi.setGridOption === 'function') {
+      gridApi.setGridOption('rowData', filtered);
+    } else if (typeof gridApi.setRowData === 'function') {
+      gridApi.setRowData(filtered);
+    }
+  }
+
+  // Render Disputes Card Grid (and sync AG Grid)
+  function renderDisputes() {
+    refreshAgGridData();
+    const grid = document.getElementById('disputesGrid');
+    if (!grid) return;
+
+    let filtered = getFilteredDisputes();
 
     if (filtered.length === 0) {
       grid.innerHTML = `
@@ -511,10 +680,45 @@
     showToast(`Switched active context to: ${tenantId.toUpperCase()}`);
   };
 
+  window.setDisputesView = function (view) {
+    currentView = view;
+    const agGridDiv = document.getElementById('agGridContainer');
+    const cardsDiv = document.getElementById('disputesGrid');
+    const btnAg = document.getElementById('btnViewAgGrid');
+    const btnCards = document.getElementById('btnViewCards');
+
+    if (view === 'aggrid') {
+      if (agGridDiv) agGridDiv.style.display = 'block';
+      if (cardsDiv) cardsDiv.style.display = 'none';
+      if (btnAg) btnAg.className = 'btn btn-secondary btn-sm active';
+      if (btnCards) btnCards.className = 'btn btn-outline btn-sm';
+      if (gridApi && typeof gridApi.sizeColumnsToFit === 'function') {
+        setTimeout(() => gridApi.sizeColumnsToFit(), 50);
+      }
+    } else {
+      if (agGridDiv) agGridDiv.style.display = 'none';
+      if (cardsDiv) cardsDiv.style.display = 'grid';
+      if (btnAg) btnAg.className = 'btn btn-outline btn-sm';
+      if (btnCards) btnCards.className = 'btn btn-secondary btn-sm active';
+    }
+  };
+
+  window.exportAgGridCsv = function () {
+    if (gridApi && typeof gridApi.exportDataAsCsv === 'function') {
+      gridApi.exportDataAsCsv({ fileName: 'LexiShield_PayPal_Disputes.csv' });
+      showToast('Exported dispute ledger to CSV via AG Grid!');
+    } else {
+      showToast('AG Grid workstation synced.');
+    }
+  };
+
   window.filterDisputes = function () {
     currentFilter.search = document.getElementById('disputeSearchInput')?.value || '';
     currentFilter.stage = document.getElementById('filterStage')?.value || 'ALL';
     currentFilter.status = document.getElementById('filterStatus')?.value || 'ALL';
+    if (gridApi && typeof gridApi.setGridOption === 'function') {
+      gridApi.setGridOption('quickFilterText', currentFilter.search);
+    }
     renderDisputes();
   };
 

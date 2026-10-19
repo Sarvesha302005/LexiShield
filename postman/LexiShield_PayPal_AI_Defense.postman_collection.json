@@ -1,0 +1,338 @@
+{
+  "info": {
+    "_postman_id": "7d9b23b4-82a1-42cb-b1b7-91a92e1bdf90",
+    "name": "LexiShield: PayPal AI Dispute Defense Engine",
+    "description": "Enterprise Automated PayPal Dispute Resolution Engine, Multimodal Gemini 1.5 AI Arbitration, Visa CE 3.0 Liability Shift, and Pre-Chargeback Deflection Suite.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. System Health & Diagnostics",
+      "item": [
+        {
+          "name": "Health Check Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Liveness & readiness probe verifying PayPal Dispute Resolution Engine subsystems."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Engine status is healthy\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"healthy\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Root Engine Metadata",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Dispute Operations & Lifecycle",
+      "item": [
+        {
+          "name": "List All Active Disputes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/disputes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "disputes"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Returns array of dispute records\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(Array.isArray(json)).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dispute Analytics & Fee Avoidance Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/disputes/stats/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "disputes", "stats", "summary"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Calculates dispute fees saved\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property(\"estimated_dispute_fees_avoided\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Specific Dispute Dossier",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "disputes", "{{disputeId}}"]
+            }
+          }
+        },
+        {
+          "name": "Download Evidentiary Rebuttal PDF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}/pdf",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "disputes", "{{disputeId}}", "pdf"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Human-In-The-Loop (HITL) Triage",
+      "item": [
+        {
+          "name": "Fetch HITL Review Queue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/disputes/hitl/queue",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "disputes", "hitl", "queue"]
+            }
+          }
+        },
+        {
+          "name": "Execute HITL Review Override",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer_id\": \"OP-LEAD-POSTMAN-JUDGE\",\n  \"action\": \"DEFEND\",\n  \"override_reason\": \"Carrier GPS and warehouse anti-tamper imagery confirmed by operator sign-off\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/disputes/{{disputeId}}/hitl/override",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "disputes", "{{disputeId}}", "hitl", "override"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Pre-Chargeback Alert Deflection",
+      "item": [
+        {
+          "name": "Ingest Ethoca / Verifi Alert (Zero-Fee Refund)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alert_id\": \"ALT-POSTMAN-9901\",\n  \"network\": \"ETHOCA\",\n  \"order_id\": \"ORD-DEFLECT-7720\",\n  \"amount\": 142.50,\n  \"currency\": \"USD\",\n  \"reason_code\": \"10.4\",\n  \"reason_description\": \"Cardholder fraud notification prior to chargeback posting\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alerts/deflection",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "alerts", "deflection"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Deflection triggered and fee avoided\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.include(\"REFUNDED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Automated RMA Returns Logistics",
+      "item": [
+        {
+          "name": "Generate Prepaid Return Label",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dispute_id\": \"{{disputeId}}\",\n  \"carrier_service\": \"USPS Priority Return\",\n  \"return_warehouse_id\": \"WH-WEST-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rma/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "rma", "generate"]
+            }
+          }
+        },
+        {
+          "name": "Inspect Inbound Return Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rma_number\": \"RMA-2026-88192\",\n  \"received_weight_kg\": 1.450,\n  \"item_condition\": \"ORIGINAL_SEALED\",\n  \"inspector_notes\": \"Serial number matched original shipment; concession release authorized\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/rma/inspect",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "rma", "inspect"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Multi-Tenant Enterprise BYOK",
+      "item": [
+        {
+          "name": "List Enterprise Tenants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "tenants"]
+            }
+          }
+        },
+        {
+          "name": "Register / Update Tenant (BYOK)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchant_id\": \"merchant_omega_global\",\n  \"business_name\": \"Omega Global Luxury E-Commerce\",\n  \"paypal_client_id\": \"ENCRYPTED_VAULT_KEY_OMEGA_882\",\n  \"paypal_client_secret\": \"ENCRYPTED_VAULT_SECRET_OMEGA_991\",\n  \"custom_rules\": {\n    \"hitl_order_value_threshold\": 200.00,\n    \"auto_defense_win_probability_cutoff\": 0.80,\n    \"allow_conversational_settlement\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "tenants"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "disputeId",
+      "value": "PP-D-8842-CE3"
+    }
+  ]
+}

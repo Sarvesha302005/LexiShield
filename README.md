@@ -3,6 +3,9 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2.8+-e92063.svg)](https://docs.pydantic.dev/)
+[![AG Grid](https://img.shields.io/badge/AG%20Grid-Enterprise%20Workstation-007ACC.svg)](https://www.ag-grid.com/)
+[![Postman](https://img.shields.io/badge/Postman-Verified%20Collection-FF6C37.svg)](https://www.postman.com/)
+[![Render](https://img.shields.io/badge/Render-Blueprint%20IaC-46E3B7.svg)](https://render.com/)
 [![CI Pipeline](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml)
 [![Docker Build](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml)
 [![Tests](https://img.shields.io/badge/Tests-39%20Passed%20(88%25%20cov)-brightgreen.svg)]()
@@ -252,3 +255,35 @@ curl -X POST http://localhost:8000/api/v1/rma/generate \
     "customer_name": "Taylor Ray"
   }'
 ```
+
+---
+
+## 7. PayPal AI Hackathon Sponsor Integrations
+
+To ensure production polish, developer convenience, and institutional-grade reliability, LexiShield natively incorporates three official sponsor technologies:
+
+### 1. AG Grid — Enterprise Dispute Workstation & Radar
+* **Role in LexiShield:** Powering the primary **Live Dispute Radar** workstation at `http://localhost:8000/`.
+* **Key Capabilities:**
+  - Fast sorting and multi-column filtering across disputed amounts, win probabilities $P(win)$, and Expected Values $E[V]$.
+  - Custom cell renderers for dynamic status badges (`SELLER PROTECTED`, `VISA CE 3.0`, `HITL REVIEW`), stage pills (`INQUIRY` vs. `CLAIM`), and inline action triggers (`Triage HITL`, `PDF Dossier`, `Inspect`).
+  - Seamless toggle between dense AG Grid workstation view and executive card view.
+  - Native client-side CSV export (`LexiShield_PayPal_Disputes.csv`).
+
+### 2. Postman — Verified Evaluation & Test Suite
+* **Role in LexiShield:** Providing judges and developers with zero-friction, one-click API testing without manual curl setup.
+* **Included Artifacts:**
+  - Collection: [`postman/LexiShield_PayPal_AI_Defense.postman_collection.json`](postman/LexiShield_PayPal_AI_Defense.postman_collection.json)
+  - Environment: [`postman/LexiShield_PayPal_Sandbox.postman_environment.json`](postman/LexiShield_PayPal_Sandbox.postman_environment.json)
+* **Features:**
+  - Automated test assertions (`pm.test`) verifying 200 OK statuses, JSON schemas, and response headers (`X-Correlation-Id`).
+  - Endpoints covering PayPal webhook intake, dispute lifecycle queries, HITL review overrides, Ethoca/Verifi alert deflection, and multi-tenant BYOK configuration.
+
+### 3. Render — Zero-Config Cloud Infrastructure (`render.yaml`)
+* **Role in LexiShield:** Infrastructure-as-Code blueprint for instant deployment to Render Cloud.
+* **Blueprint:** [`render.yaml`](render.yaml)
+* **Configuration:**
+  - Docker container web service runtime with Python 3.12+ and FastAPI.
+  - Persistent disk volume mount (`/app/artifacts`) for generated PDF rebuttal dossiers.
+  - Health check path configured to `/health` with automated branch deployment on push to `main`.
+
