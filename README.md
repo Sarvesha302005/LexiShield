@@ -18,172 +18,53 @@
 
 ## 1. Enterprise Defense Architecture
 
-LexiShield operates on an asynchronous, event-driven, zero-trust financial architecture engineered for enterprise e-commerce merchants. The system is partitioned into six decoupled operational tiers:
-
-### 1.1 Multi-Tier Subsystem Topology
+LexiShield operates on an event-driven, zero-trust financial architecture engineered to detect, deflect, and defend PayPal disputes autonomously.
 
 ```mermaid
-graph TB
-    %% Styling Definitions
-    classDef edgeStyle fill:#0f172a,stroke:#00f2fe,stroke-width:2px,color:#f8fafc;
-    classDef secStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef meshStyle fill:#14231b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef compStyle fill:#312e81,stroke:#a78bfa,stroke-width:2px,color:#f8fafc;
-    classDef aiStyle fill:#3b0764,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
-    classDef actStyle fill:#1c1917,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
-    classDef erpStyle fill:#18181b,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
-
-    subgraph TIER1 ["TIER 1: Ingestion, Deflection & Trust Boundary"]
-        WH_PP["PayPal Webhooks<br/><code>CUSTOMER.DISPUTE.*</code>"]:::edgeStyle
-        WH_ALT["Alert Streams<br/><code>Ethoca & Verifi RDR</code>"]:::edgeStyle
-        SEC_GUARD["Zero-Trust Security Shield<br/>• X.509 CA Cert Validation<br/>• SSRF Host Whitelist Filter<br/>• RSA SHA-256 Sig Verification"]:::secStyle
-        IDEM_LOCK["Distributed Idempotency Guard<br/><code>In-Memory / Redis Lock</code>"]:::secStyle
-        TENANT_ROUTER["Multi-Tenant RLS Router<br/><code>BYOK Vault & Risk Isolation</code>"]:::secStyle
+flowchart LR
+    %% Modern Compact Architecture
+    subgraph S1 ["1. Ingress & Deflection"]
+        WH["PayPal Webhooks<br/><code>CUSTOMER.DISPUTE.*</code>"]
+        ALT["Card Issuer Alerts<br/><code>Ethoca & Verifi RDR</code>"]
+        SEC["Cryptographic Shield<br/>X.509 CA & RSA Sig"]
     end
 
-    subgraph TIER2 ["TIER 2: Pre-Dispute Deflection Hub"]
-        DEFLECT_ENG["PreChargebackDeflectionEngine<br/>20-72h Issuer Lead Time Intake"]:::actStyle
-        AUTO_REFUND["Zero-Fee Refund Executor<br/><code>POST /v1/payments/refund</code><br/>Averts $15-$30 Dispute Fee"]:::actStyle
+    subgraph S2 ["2. Telemetry Mesh"]
+        POD["Carrier Logistics<br/>GPS & Proof of Delivery"]
+        SCALE["Warehouse Sensors<br/>Scale Weight & Barcodes"]
+        CRM["Order DB & LTV<br/>Customer Ledger & IPs"]
     end
 
-    subgraph TIER3 ["TIER 3: Async Telemetry Mesh (Parallel asyncio.gather)"]
-        CARRIER_SVC["Carrier Telemetry Service<br/>• Live FedEx / UPS / USPS Tracking<br/>• Proof of Delivery & GPS Stamps<br/>• Signed-By Recipient Verification"]:::meshStyle
-        WAREHOUSE_SVC["Warehouse Sensor Telemetry<br/>• High-Precision Scale Weights<br/>• Baseline Variance Analysis<br/>• Anti-Tamper Barcode Scans"]:::meshStyle
-        ORDER_SVC["Order & Customer Intelligence<br/>• Historical Order Ledger<br/>• Checkout IP & Device Hashes<br/>• Customer Lifetime Spend LTV"]:::meshStyle
+    subgraph S3 ["3. AI & Compliance Core"]
+        COMPL["Policy Guardrails<br/>$750+ Sig & AVS Match"]
+        CE3["Visa CE 3.0 Engine<br/>2-Factor IP/Device Match"]
+        GEMINI["Gemini 1.5 Multimodal<br/>Vision & EV Optimization"]
     end
 
-    subgraph TIER4 ["TIER 4: Policy Compliance & Card Network Gates"]
-        COMPLIANCE_GATE["SellerProtectionComplianceEngine<br/>• $750+ Signature Mandate Rule<br/>• AVS Tokenized Address Match<br/>• Mid-Transit Redirection Sensor<br/>• INR vs SNAD vs Digital Filters"]:::compStyle
-        VISA_CE3_ENG["Visa CE 3.0 Matching Engine<br/>• 120-365 Day Historical Lookback<br/>• 0 Prior Chargeback Qualification<br/>• 2-Factor Tech Match: IP & Device"]:::compStyle
+    subgraph S4 ["4. Adjudication & Ledger"]
+        PDF["ReportLab Engine<br/>Evidence PDF Dossier"]
+        BOT["Inquiry Bot Ladder<br/>Courtesy Settlement"]
+        API["PayPal REST APIs<br/><code>provide-evidence / refund</code>"]
+        ERP["ERP Sync & RMA<br/>NetSuite / QuickBooks"]
     end
 
-    subgraph TIER5 ["TIER 5: Multimodal AI & Quantitative Decision Core"]
-        GEMINI_AI["Google Gemini 1.5 Pro / Flash<br/>• Packing Cam Visual Verification<br/>• Carrier Delivery Photo Inspection<br/>• Qualitative Claim Fact-Checking"]:::aiStyle
-        EV_MATH["Quantitative Arbitration Optimizer<br/><code>E[V] = P(win)*V - (1-P(win))*(V + F)</code><br/>Fee Tier Sensitivity ($15 vs $30)"]:::aiStyle
-        HITL_QUEUE["Human-in-the-Loop Triage<br/>• Order Value > $300 Filter<br/>• Borderline 0.60 <= P(win) < 0.75<br/>• 1-Click Operational Override"]:::aiStyle
-    end
-
-    subgraph TIER6 ["TIER 6: Automated Adjudication & Back-Office Ledger"]
-        PDF_COMPILER["ReportLab PDF Dossier Compiler<br/>• Dynamic CE 3.0 Evidence Table<br/>• Sensor Readings & AVS Badges<br/>• Immutable Legal Rebuttal Artifact"]:::actStyle
-        BOT_ENG["Conversational Settlement Bot<br/>• Turn 1: Courier GPS & Tracking<br/>• Turn 2: 20% Courtesy Partial Refund<br/>• Turn 3: Arbitration Handover"]:::actStyle
-        PAYPAL_DISPATCH["PayPal REST API Client<br/>• <code>POST provide-evidence</code><br/>• <code>POST send-message</code><br/>• <code>POST make-offer</code><br/>• <code>POST accept-claim</code>"]:::actStyle
-        ERP_SYNC["ERP Double-Entry General Ledger<br/>• Escrow Frozen Fund Provisioning<br/>• Defense Won Reversal Entry<br/>• Concession COGS Write-Off"]:::erpStyle
-        RMA_LOGISTICS["Automated RMA Returns Manager<br/>• Prepaid Carrier Return Label<br/>• Inbound Barcode Inspection Scan<br/>• Return Verified Concession Release"]:::erpStyle
-    end
-
-    %% Event Routing Connections
-    WH_ALT --> DEFLECT_ENG
-    DEFLECT_ENG -->|Alert Match| AUTO_REFUND
-    
-    WH_PP --> SEC_GUARD
-    SEC_GUARD --> IDEM_LOCK
-    IDEM_LOCK --> TENANT_ROUTER
-    
-    TENANT_ROUTER -->|Concurrent Fan-Out| CARRIER_SVC & WAREHOUSE_SVC & ORDER_SVC
-    
-    CARRIER_SVC & WAREHOUSE_SVC & ORDER_SVC --> COMPLIANCE_GATE
-    ORDER_SVC --> VISA_CE3_ENG
-    
-    COMPLIANCE_GATE & VISA_CE3_ENG --> GEMINI_AI
-    GEMINI_AI --> EV_MATH
-    
-    EV_MATH -->|Borderline Case| HITL_QUEUE
-    HITL_QUEUE -->|Operator Action| PDF_COMPILER
-    
-    EV_MATH -->|Stage == INQUIRY| BOT_ENG
-    BOT_ENG -->|Inquiry Message / Offer| PAYPAL_DISPATCH
-    
-    EV_MATH -->|Stage == CLAIM & Win Candidate| PDF_COMPILER
-    PDF_COMPILER -->|Multipart PDF Upload| PAYPAL_DISPATCH
-    
-    EV_MATH -->|Stage == CLAIM & Policy Void| PAYPAL_DISPATCH
-    
-    PAYPAL_DISPATCH --> ERP_SYNC
-    PAYPAL_DISPATCH --> RMA_LOGISTICS
+    ALT -->|Pre-Dispute Zero-Fee Refund| API
+    WH --> SEC --> S2
+    S2 --> S3
+    S3 -->|Inquiry Stage| BOT --> API
+    S3 -->|Claim Defense| PDF --> API
+    S3 -->|Unwinnable Policy Void| API
+    API --> ERP
 ```
 
----
+### Architecture Pipeline Overview
 
-### 1.2 End-to-End Dispute Lifecycle Sequence Flow
-
-The sequence diagram below visualizes the execution timeline when an incoming PayPal dispute webhook or pre-chargeback alert is received:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Customer as Buyer / Cardholder
-    participant PP as PayPal REST API / Alert Stream
-    participant SEC as Webhook Security Guard (X.509)
-    participant ORCH as DisputePipeline Orchestrator
-    participant MESH as Telemetry Mesh (Carrier/WH/Order)
-    participant RULE as Compliance & Visa CE 3.0 Engine
-    participant AI as Gemini 1.5 Multimodal AI
-    participant PDF as ReportLab Dossier Engine
-    participant ERP as ERP General Ledger & RMA
-
-    rect rgb(20, 25, 45)
-        Note over Customer,PP: Pre-Dispute Deflection Phase (20-72h Lead)
-        Customer->>PP: Files alert with Card Issuer (Ethoca / Verifi)
-        PP->>ORCH: POST /api/v1/alerts/deflection
-        ORCH->>PP: POST /v1/payments/refund (Immediate Zero-Fee Refund)
-        ORCH->>ERP: Record Deflected Claim (Saved $15.00 Dispute Fee)
-    end
-
-    rect rgb(15, 30, 25)
-        Note over PP,ORCH: Dispute Intake & Trust Boundary Verification
-        Customer->>PP: Escalates to Formal PayPal Dispute
-        PP->>SEC: Webhook: CUSTOMER.DISPUTE.CREATED
-        SEC->>SEC: Validate X.509 Cert URL, Cache Public Key & Verify RSA Sig
-        SEC->>ORCH: Authorized Ingestion Event
-        ORCH->>ERP: Record Escrow Freeze: Dr Escrow Receivable / Cr Operating Cash
-    end
-
-    rect rgb(30, 15, 40)
-        Note over ORCH,AI: Parallel Telemetry Gathering & Policy Evaluation
-        par Parallel Telemetry Gathering
-            ORCH->>MESH: Fetch Carrier GPS, Tracking & Signature Telemetry
-            ORCH->>MESH: Fetch Warehouse Scale Weight & Barcode Sensor Readings
-            ORCH->>MESH: Fetch Customer Order History, IP & Device Fingerprints
-        end
-        MESH-->>ORCH: Consolidated Logistics & Customer Context
-        ORCH->>RULE: Evaluate Policy Guardrails & Visa CE 3.0
-        RULE-->>ORCH: Compliance Decision ($750+ Sig Check & CE 3.0 Status)
-        ORCH->>AI: Synthesize Telemetry, Camera Imagery & Compute Expected Value E[V]
-        AI-->>ORCH: P(win) Probability, Recommended Action & Legal Rebuttal Copy
-    end
-
-    rect rgb(25, 25, 20)
-        Note over ORCH,PP: Automated Adjudication & Settlement Execution
-        alt Stage == INQUIRY
-            ORCH->>PP: POST /v1/customer/disputes/{id}/send-message (Turn 1: Tracking/GPS)
-            ORCH->>PP: POST /v1/customer/disputes/{id}/make-offer (Turn 2: 20% Courtesy Refund)
-        else Stage == CLAIM and Defense Recommended
-            ORCH->>PDF: Compile ReportLab PDF (Carrier Timeline + Scale Data + CE 3.0 Table)
-            PDF-->>ORCH: Generated Immutable PDF Dossier
-            ORCH->>PP: POST /v1/customer/disputes/{id}/provide-evidence (Multipart PDF)
-            ORCH->>ERP: Defense Submitted (Awaiting Adjudication Win)
-        else Stage == CLAIM and Policy Void ($750+ Mandate Violated)
-            ORCH->>PP: POST /v1/customer/disputes/{id}/accept-claim (Concession)
-            ORCH->>ERP: Write Off Inventory COGS & Log Fee Expense
-            ORCH->>ERP: Generate Prepaid Return Label (RMA)
-        end
-    end
-```
-
----
-
-### 1.3 Subsystem Architecture & Resilience Matrix
-
-| Architectural Layer | Core Modules | Primary Responsibilities | Resilience & Security Controls |
-| :--- | :--- | :--- | :--- |
-| **Ingestion & Security** | [`src/core/security.py`](src/core/security.py)<br>[`src/api/v1/webhooks.py`](src/api/v1/webhooks.py) | Cryptographic webhook signature validation; SSRF protection; X.509 cert validation; idempotency locking. | Rejects non-PayPal certificates; caches public keys; prevents duplicate webhook submissions via atomic locking. |
-| **Pre-Chargeback Deflection** | [`src/services/alerts.py`](src/services/alerts.py)<br>[`src/api/v1/alerts.py`](src/api/v1/alerts.py) | Ingests Ethoca Consumer Clarity and Verifi RDR alerts 20–72 hours prior to posting; triggers zero-fee automated refunds. | Matches order reference in real time; protects merchant dispute ratios and prevents $15–$30 PayPal dispute fees. |
-| **Telemetry Mesh** | [`src/services/carrier.py`](src/services/carrier.py)<br>[`src/services/warehouse.py`](src/services/warehouse.py)<br>[`src/services/order.py`](src/services/order.py) | Gathers carrier GPS stamps, proof-of-delivery signatures, warehouse scale weights, and customer lifetime value. | Asynchronous `asyncio.gather` execution minimizes intake latency; fallback mocks ensure pipeline continuity. |
-| **Policy Compliance** | [`src/services/compliance.py`](src/services/compliance.py) | Enforces PayPal Seller Protection policies: $750+ signature mandate, AVS token matching, package redirection detection. | Hard caps $P(win)$ at 0.05 on policy violations to prevent wasted disputes and fees; selects category evidence templates. |
-| **Visa CE 3.0 Engine** | [`src/services/visa_ce3.py`](src/services/visa_ce3.py) | Evaluates historical customer ledgers for 120–365 day qualifying orders with zero prior chargebacks and 2-factor tech matches. | Verifies IP address or device fingerprint match; shifts liability automatically under Visa Core Rule 10.4. |
-| **AI Arbitration & EV** | [`src/services/llm_arbitrator.py`](src/services/llm_arbitrator.py)<br>[`src/models/arbitration.py`](src/models/arbitration.py) | Google Gemini 1.5 multimodal vision evaluation of packing stations and signatures; calculates financial Expected Value $E[V]$. | Pydantic v2 structured output validation; calibrated fee tier modeling ($15 standard vs $30 high-volume). |
-| **Dossier & Settlement** | [`src/services/pdf_generator.py`](src/services/pdf_generator.py)<br>[`src/services/conversation_bot.py`](src/services/conversation_bot.py) | Dynamic ReportLab PDF rebuttal generator; multi-turn autonomous buyer negotiation ladder during Inquiry phase. | Emits audit-ready PDF dossiers with CE 3.0 schedules; offers 20% courtesy partial refunds for minor defects. |
-| **Enterprise SaaS & ERP** | [`src/services/accounting.py`](src/services/accounting.py)<br>[`src/services/rma.py`](src/services/rma.py)<br>[`src/core/tenant.py`](src/core/tenant.py) | Multi-tenant RLS isolation; BYOK PayPal credentials; double-entry general ledger syncing; prepaid RMA return labels. | Partitions data by `merchant_id`; maintains double-entry journal balance (Escrow, Frozen Funds, COGS). |
+| Stage | Primary Responsibility | Key Technologies |
+| :--- | :--- | :--- |
+| **1. Ingress & Deflection** | Ingests PayPal dispute webhooks and pre-chargeback alerts (Ethoca / Verifi) 20–72h prior to posting. Executes automated zero-fee refunds to eliminate $15–$30 dispute fees and preserve dispute ratios. | FastAPI, Cryptography (RSA/X.509), Pydantic v2 |
+| **2. Telemetry Mesh** | Executes parallel, asynchronous queries across carrier APIs (FedEx, UPS, USPS), warehouse scale sensors (weight variance & barcode scans), and customer history. | AsyncIO (`asyncio.gather`), Carrier Connectors |
+| **3. AI & Compliance Core** | Enforces PayPal Seller Protection policies ($750+ signature mandate, AVS token match), evaluates Visa CE 3.0 2-factor matches, and runs Gemini 1.5 multimodal arbitration to optimize Expected Value $E[V]$. | Google Gemini 1.5 Pro, Visa Core Rule 10.4 |
+| **4. Adjudication & Ledger** | Auto-generates ReportLab PDF legal dossiers for claims, engages buyers via a 3-turn conversational bot during inquiries, dispatches to PayPal REST endpoints, and syncs double-entry ERP ledgers. | ReportLab PDF Engine, PayPal REST API, ERP Webhooks |
 
 ---
 
