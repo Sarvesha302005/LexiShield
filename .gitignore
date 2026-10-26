@@ -22,3 +22,7 @@ artifacts/dossiers/*.pdf
 .idea/
 .vscode/
 *.swp
+
+# Build artifacts
+*.egg-info/
+*.egg
