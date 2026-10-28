@@ -3,7 +3,7 @@ import { ShieldCheck, CreditCard, CheckCircle2 } from 'lucide-react';
 import Reveal from './Reveal';
 import SpotlightCard from './SpotlightCard';
 
-export default function PromisesAndStats({ onExploreDashboard }) {
+export default function PromisesAndStats() {
   return (
     <section id="coverage" className="py-20 bg-slate-50/70 border-y border-slate-200/80">
       <div className="container mx-auto px-6 max-w-5xl">

@@ -22,7 +22,6 @@ export default function App() {
   const [disputes, setDisputes] = useState(INITIAL_DISPUTES);
   const [merchantProfile, setMerchantProfile] = useState(INITIAL_MERCHANT_PROFILE);
   const [chatConversations, setChatConversations] = useState(INITIAL_CHAT_CONVERSATIONS);
-  const [isSandboxConnected, setIsSandboxConnected] = useState(true);
 
   // Sync browser back/forward buttons
   useEffect(() => {
@@ -96,7 +95,6 @@ export default function App() {
   };
 
   const handleConnectSuccess = (authData) => {
-    setIsSandboxConnected(true);
     setMerchantProfile(prev => ({
       ...prev,
       business_name: authData.business_name || prev.business_name,

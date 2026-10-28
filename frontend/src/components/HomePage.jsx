@@ -4,8 +4,7 @@ import HowItWorks from './HowItWorks';
 import PromisesAndStats from './PromisesAndStats';
 import FaqSection from './FaqSection';
 import Reveal from './Reveal';
-
-const WORKS_WITH = ['PayPal', 'Shopify', 'UPS', 'FedEx', 'USPS', 'Visa', 'Mastercard'];
+import LogoCarousel from './LogoCarousel';
 
 const HEADLINE_LINES = [
   { text: 'Disputes resolved,', accent: false },
@@ -80,11 +79,7 @@ export default function HomePage({ onNavigateAuth, onNavigateDashboard }) {
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">
               Works with
             </p>
-            <ul className="works-with">
-              {WORKS_WITH.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
+            <LogoCarousel />
           </div>
 
         </div>
@@ -94,7 +89,7 @@ export default function HomePage({ onNavigateAuth, onNavigateDashboard }) {
       <HowItWorks />
 
       {/* 3. PROMISES & STATS: Internal PayPal + External Card Issuers */}
-      <PromisesAndStats onExploreDashboard={onNavigateDashboard} />
+      <PromisesAndStats />
 
       {/* 4. FAQs: Top questions answered with clean accordion */}
       <FaqSection />
