@@ -17,6 +17,9 @@ from starlette.staticfiles import StaticFiles
 
 from src.api.v1 import api_v1_router
 from src.core.config import get_settings
+from src.core.tenant import get_tenant_manager
+from src.database import init_db, seed_db_if_empty
+from src.workflows.dispute_pipeline import get_dispute_pipeline
 from src.core.exceptions import (
     DisputeNotFoundError,
     PayPalAPIError,
@@ -37,10 +40,18 @@ logger = logging.getLogger("dispute_engine")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Application lifespan context:
-    Initializes required storage directories, warmups, and teardown.
+    Initializes storage directories, verifies database schema, seeds portfolio data,
+    and synchronizes dispute and tenant registries.
     """
     logger.info("Initializing PayPal Dispute Resolution Engine...")
     os.makedirs(os.path.join(os.getcwd(), "artifacts", "dossiers"), exist_ok=True)
+    try:
+        await init_db()
+        await seed_db_if_empty()
+        await get_tenant_manager().sync_from_db()
+        await get_dispute_pipeline().sync_from_db()
+    except Exception as exc:
+        logger.warning(f"Database lifespan startup notice: {exc}")
     yield
     logger.info("Shutting down PayPal Dispute Resolution Engine.")
 

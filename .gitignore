@@ -14,6 +14,10 @@ env/
 venv/
 ENV/
 
+# Local databases
+*.db
+*.sqlite3
+
 # Output dossiers (keep directory structure)
 artifacts/dossiers/*.pdf
 !artifacts/dossiers/.gitkeep

@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "PayPal Dispute Resolution Engine"
     API_V1_STR: str = "/api/v1"
 
+    # Database Configuration
+    DATABASE_URL: str = Field(
+        default="sqlite+aiosqlite:///./lexishield.db",
+        description="Async database connection URL (SQLite for local dev, PostgreSQL for production)",
+    )
+
     # PayPal API Settings
     PAYPAL_MODE: Literal["sandbox", "live"] = "sandbox"
     PAYPAL_CLIENT_ID: str = "mock_paypal_client_id"
@@ -40,6 +46,10 @@ class Settings(BaseSettings):
     # Google Gemini LLM Settings
     GEMINI_API_KEY: str = "mock_gemini_api_key"
     GEMINI_MODEL: str = "gemini-1.5-pro"
+
+    # OpenRouter LLM Settings
+    OPENROUTER_API_KEY: str = "mock_openrouter_api_key"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
     # Financial & Fee Parameters
     STANDARD_DISPUTE_FEE: float = Field(default=15.00, description="Standard dispute fee in USD")

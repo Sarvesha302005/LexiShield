@@ -12,13 +12,17 @@ from src.core.exceptions import DisputeNotFoundError
 from src.core.tenant import TenantManager, get_tenant_manager
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
+    CarrierTrackingInfo,
+    DisputeReason,
     DisputeRecord,
     DisputeStage,
     DisputeStatsSummary,
     HITLOverrideRequest,
+    OrderCustomerInfo,
     PayPalDisputeResource,
     PayPalWebhookEvent,
     PipelineExecutionStatus,
+    WarehouseFulfillmentInfo,
 )
 from src.services.accounting import AccountingIntegrationService
 from src.services.carrier import CarrierService
@@ -69,7 +73,152 @@ class DisputePipeline:
 
         # Thread-safe in-memory dispute registry: dispute_id -> DisputeRecord
         self._dispute_store: dict[str, DisputeRecord] = {}
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+
+    @property
+    def lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    async def sync_from_db(self) -> None:
+        """Loads all persistent dispute records from the database into the runtime registry using direct SQLite."""
+        try:
+            import json
+            import sqlite3
+            conn = sqlite3.connect("lexishield.db", timeout=5.0)
+            c = conn.cursor()
+            rows = c.execute("""
+                SELECT dispute_id, merchant_id, stage, reason, amount, currency,
+                       seller_transaction_id, order_id, customer_email, pipeline_status,
+                       win_probability, expected_value, dispute_fee_applied, action_taken,
+                       hitl_flagged, hitl_reasons, rebuttal_statement, pdf_dossier_path,
+                       paypal_api_response, compliance_eligible, compliance_disqualifications,
+                       visa_ce3_qualified, rma_number, telemetry_carrier, telemetry_warehouse,
+                       audit_trail, created_at, updated_at
+                FROM disputes
+            """).fetchall()
+            conn.close()
+
+            for r in rows:
+                c_data = json.loads(r[23]) if r[23] else None
+                w_data = json.loads(r[24]) if r[24] else None
+                self._dispute_store[r[0]] = DisputeRecord(
+                    dispute_id=r[0],
+                    merchant_id=r[1],
+                    stage=DisputeStage(r[2]),
+                    reason=(
+                        DisputeReason(r[3])
+                        if r[3] in [e.value for e in DisputeReason]
+                        else (
+                            DisputeReason.CANCELED_RECURRING_BILLING
+                            if "RECURRING" in r[3].upper()
+                            else DisputeReason.OTHER
+                        )
+                    ),
+                    amount=r[4],
+                    currency=r[5],
+                    seller_transaction_id=r[6],
+                    order_id=r[7],
+                    customer_email=r[8],
+                    pipeline_status=PipelineExecutionStatus(r[9]),
+                    win_probability=r[10],
+                    expected_value=r[11],
+                    dispute_fee_applied=r[12],
+                    action_taken=r[13],
+                    hitl_flagged=bool(r[14]),
+                    hitl_reasons=json.loads(r[15]) if r[15] else [],
+                    rebuttal_statement=r[16],
+                    pdf_dossier_path=r[17],
+                    paypal_api_response=json.loads(r[18]) if r[18] else None,
+                    compliance_eligible=bool(r[19]),
+                    compliance_disqualifications=json.loads(r[20]) if r[20] else [],
+                    visa_ce3_qualified=bool(r[21]),
+                    rma_number=r[22],
+                    telemetry_carrier=CarrierTrackingInfo(
+                        tracking_number=c_data.get("tracking_number", "UNKNOWN"),
+                        carrier_name=c_data.get("carrier_name", "FedEx"),
+                        status=c_data.get("status", "DELIVERED"),
+                        ship_date=c_data.get("ship_date", "2026-10-15T09:00:00Z"),
+                        destination_address=c_data.get("destination_address", "Confirmed Address"),
+                        delivered_date=c_data.get("delivered_date"),
+                        signed_by=c_data.get("signed_by"),
+                        gps_latitude=c_data.get("gps_latitude"),
+                        gps_longitude=c_data.get("gps_longitude"),
+                    ) if c_data else None,
+                    telemetry_warehouse=WarehouseFulfillmentInfo(
+                        order_id=r[7] or r[0],
+                        pack_timestamp=w_data.get("pack_timestamp", "2026-10-15T08:30:00Z"),
+                        warehouse_id=w_data.get("warehouse_id", "WH-01"),
+                        packer_id=w_data.get("packer_id", "PACKER-01"),
+                        scale_measured_weight_kg=w_data.get("scale_measured_weight_kg", 1.40),
+                        expected_weight_kg=w_data.get("expected_weight_kg", 1.40),
+                        weight_delta_percent=w_data.get("weight_delta_percent", 0.0),
+                        scanned_serials=w_data.get("scanned_serials", []),
+                        tamper_seal_id=w_data.get("tamper_seal_id", "SEAL-001"),
+                        packing_station_photo_url=w_data.get("packing_station_photo_url", "artifacts/wh.jpg"),
+                        quality_inspection_passed=w_data.get("quality_inspection_passed", True),
+                    ) if w_data else None,
+                    telemetry_order=None,
+                    audit_trail=json.loads(r[25]) if r[25] else [],
+                )
+            if rows:
+                logger.info(f"Synchronized {len(rows)} disputes from database.")
+        except Exception as exc:
+            logger.warning(f"Dispute database sync notice: {exc}")
+
+    async def _save_record_to_db(self, record: DisputeRecord) -> None:
+        """Persists or updates a dispute record in the database using direct SQLite."""
+        try:
+            import json
+            import sqlite3
+            conn = sqlite3.connect("lexishield.db", timeout=5.0)
+            c = conn.cursor()
+            c.execute("""
+                INSERT OR REPLACE INTO disputes (
+                    dispute_id, merchant_id, stage, reason, amount, currency,
+                    seller_transaction_id, order_id, customer_email, pipeline_status,
+                    action_taken, hitl_flagged, hitl_reasons, rebuttal_statement,
+                    pdf_dossier_path, paypal_api_response, compliance_eligible,
+                    compliance_disqualifications, visa_ce3_qualified, rma_number,
+                    telemetry_carrier, telemetry_warehouse, telemetry_order, audit_trail,
+                    win_probability, expected_value, dispute_fee_applied, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record.dispute_id,
+                record.merchant_id,
+                record.stage.value,
+                record.reason.value,
+                record.amount,
+                record.currency,
+                record.seller_transaction_id,
+                record.order_id,
+                record.customer_email,
+                record.pipeline_status.value,
+                record.action_taken,
+                1 if record.hitl_flagged else 0,
+                json.dumps(record.hitl_reasons),
+                record.rebuttal_statement,
+                record.pdf_dossier_path,
+                json.dumps(record.paypal_api_response) if record.paypal_api_response else None,
+                1 if (record.compliance_eligible is None or record.compliance_eligible) else 0,
+                json.dumps(record.compliance_disqualifications),
+                1 if record.visa_ce3_qualified else 0,
+                record.rma_number,
+                json.dumps(record.telemetry_carrier.model_dump()) if record.telemetry_carrier else None,
+                json.dumps(record.telemetry_warehouse.model_dump()) if record.telemetry_warehouse else None,
+                json.dumps(record.telemetry_order.model_dump()) if record.telemetry_order else None,
+                json.dumps(record.audit_trail),
+                record.win_probability,
+                record.expected_value,
+                record.dispute_fee_applied or 15.0,
+                record.created_at.isoformat() if hasattr(record.created_at, "isoformat") else str(record.created_at),
+                record.updated_at.isoformat() if hasattr(record.updated_at, "isoformat") else str(record.updated_at),
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            logger.warning(f"Could not persist dispute {record.dispute_id} to database: {exc}")
 
     def get_record(self, dispute_id: str) -> DisputeRecord | None:
         """Retrieve stored dispute record."""
@@ -119,7 +268,7 @@ class DisputePipeline:
 
         # Handle external dispute resolution events
         if event.event_type == "CUSTOMER.DISPUTE.RESOLVED":
-            async with self._lock:
+            async with self.lock:
                 existing = self._dispute_store.get(dispute_id)
                 if existing:
                     existing.pipeline_status = PipelineExecutionStatus.RESOLVED
@@ -130,7 +279,7 @@ class DisputePipeline:
                     return existing
 
         # Idempotency check
-        async with self._lock:
+        async with self.lock:
             existing = self._dispute_store.get(dispute_id)
             if existing and existing.pipeline_status in (
                 PipelineExecutionStatus.DEFENDED,
@@ -175,12 +324,14 @@ class DisputePipeline:
         txn_id = None
         order_id = None
         customer_email = None
+        customer_name = None
         if dispute.disputed_transactions:
             txn = dispute.disputed_transactions[0]
             txn_id = txn.seller_transaction_id or txn.buyer_transaction_id
             order_id = txn.invoice_number or txn.custom
             if txn.buyer:
                 customer_email = txn.buyer.email
+                customer_name = txn.buyer.name
 
         effective_order_id = order_id or dispute_id
 
@@ -196,13 +347,18 @@ class DisputePipeline:
         logger.info(f"[{correlation_id}] Fetching external telemetry for {dispute_id}...")
         try:
             carrier_task = self.carrier_service.get_tracking(
-                tracking_number=None, order_id=effective_order_id
+                tracking_number=None,
+                order_id=effective_order_id,
+                customer_name=customer_name,
+                customer_email=customer_email,
             )
             wh_task = self.warehouse_service.get_fulfillment_telemetry(order_id=effective_order_id)
             order_task = self.order_service.get_order_by_transaction_or_id(
                 transaction_id=txn_id,
                 order_id=effective_order_id,
                 disputed_amount=amount,
+                customer_name=customer_name,
+                customer_email=customer_email,
             )
 
             carrier_data, wh_data, order_data = await asyncio.gather(
@@ -219,8 +375,9 @@ class DisputePipeline:
                 pipeline_status=PipelineExecutionStatus.FAILED,
                 audit_trail=[f"Telemetry gathering failed: {exc}"],
             )
-            async with self._lock:
+            async with self.lock:
                 self._dispute_store[dispute_id] = record
+            await self._save_record_to_db(record)
             return record
 
         # 3. PayPal Seller Protection Compliance Guardrails
@@ -407,8 +564,9 @@ class DisputePipeline:
             ],
         )
 
-        async with self._lock:
+        async with self.lock:
             self._dispute_store[dispute_id] = record
+        await self._save_record_to_db(record)
 
         logger.info(
             f"[{correlation_id}] Dispute {dispute_id} complete -> Status: {pipeline_status}."
@@ -423,7 +581,7 @@ class DisputePipeline:
         """
         Human reviewer override: Dispatches approved action and records accounting events.
         """
-        async with self._lock:
+        async with self.lock:
             record = self._dispute_store.get(dispute_id)
             if not record:
                 raise DisputeNotFoundError(f"Dispute {dispute_id} not found.")
@@ -510,7 +668,7 @@ class DisputePipeline:
             action_taken = f"HUMAN_OVERRIDE_MADE_OFFER_${amt:.2f}"
             status = PipelineExecutionStatus.DE_ESCALATED
 
-        async with self._lock:
+        async with self.lock:
             record.pipeline_status = status
             record.action_taken = action_taken
             record.hitl_reviewed_by = override_req.reviewer_id
@@ -522,6 +680,7 @@ class DisputePipeline:
             )
             record.updated_at = datetime.now(UTC)
 
+        await self._save_record_to_db(record)
         return record
 
     def get_stats_summary(self, merchant_id: str | None = None) -> DisputeStatsSummary:

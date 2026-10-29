@@ -30,6 +30,8 @@ class OrderDBService:
         transaction_id: str | None = None,
         order_id: str | None = None,
         disputed_amount: float | None = None,
+        customer_name: str | None = None,
+        customer_email: str | None = None,
     ) -> OrderCustomerInfo:
         """
         Fetch order record by transaction_id or order_id.
@@ -40,6 +42,66 @@ class OrderDBService:
         if lookup_key in self._mock_registry:
             logger.info(f"Retrieved registered order record for {lookup_key}.")
             return self._mock_registry[lookup_key]
+
+        # Check SQLite lexishield.db for seeded CustomerOrderModel
+        try:
+            import sqlite3
+            import json
+            conn = sqlite3.connect("lexishield.db", timeout=3.0)
+            c = conn.cursor()
+            row = c.execute("""
+                SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
+                       order_date, total_amount, currency, shipping_address, line_items,
+                       scanned_serials, past_orders_count, past_disputes_count
+                FROM orders 
+                WHERE order_id = ? OR transaction_id = ? OR customer_email = ? OR customer_name = ?
+            """, (lookup_key, lookup_key, customer_email or lookup_key, customer_name or lookup_key)).fetchone()
+            conn.close()
+
+            if row:
+                logger.info(f"Retrieved persistent Zapier-ingested order for {lookup_key}.")
+                raw_items = json.loads(row[9]) if row[9] else []
+                serials = json.loads(row[10]) if row[10] else []
+                line_items = [
+                    OrderLineItem(
+                        sku=item.get("sku", "SKU-ZAP"),
+                        name=item.get("name", "Product"),
+                        quantity=int(item.get("quantity", 1)),
+                        unit_price=float(item.get("price", item.get("unit_price", row[6]))),
+                        total_price=float(item.get("price", item.get("unit_price", row[6]))) * int(item.get("quantity", 1)),
+                        serial_number=serials[0] if serials else None,
+                    )
+                    for item in raw_items
+                ] or [
+                    OrderLineItem(
+                        sku="SKU-ZAP-SYNC",
+                        name="Zapier Synced Item",
+                        quantity=1,
+                        unit_price=row[6],
+                        total_price=row[6],
+                        serial_number=serials[0] if serials else None,
+                    )
+                ]
+                return OrderCustomerInfo(
+                    order_id=row[0],
+                    transaction_id=row[1],
+                    customer_id=row[2],
+                    customer_name=row[3],
+                    customer_email=row[4],
+                    order_date=row[5],
+                    total_amount=row[6],
+                    currency=row[7],
+                    margin_rate=0.45,
+                    line_items=line_items,
+                    shipping_address=row[8],
+                    customer_tenure_months=18,
+                    past_orders_count=row[11],
+                    past_disputes_count=row[12],
+                    customer_lifetime_value=round(row[6] * 3.5, 2),
+                    merchant_monthly_disputes_count=18,
+                )
+        except Exception as exc:
+            logger.debug(f"SQLite order lookup notice: {exc}")
 
         effective_order_id = (
             order_id or f"ORD-{lookup_key[-8:] if len(lookup_key) >= 8 else lookup_key}"
@@ -57,8 +119,8 @@ class OrderDBService:
             order_id=effective_order_id,
             transaction_id=effective_txn_id,
             customer_id=f"CUST-{abs(hash(lookup_key)) % 10000:04d}",
-            customer_name="Alex Mercer",
-            customer_email="alex.mercer@example.com",
+            customer_name=customer_name or "Alex Mercer",
+            customer_email=customer_email or "alex.mercer@example.com",
             order_date="2026-10-07T18:15:00Z",
             total_amount=amount,
             currency="USD",

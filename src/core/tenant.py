@@ -1,9 +1,11 @@
 """
 Tenant Isolation & Management Manager.
-Provides Row-Level Security (RLS) simulation and BYOK credential resolution per merchant.
+Provides Row-Level Security (RLS) simulation, BYOK credential resolution,
+and persistent database synchronization per merchant.
 """
 
 import logging
+from sqlalchemy import select
 
 from src.core.config import get_settings
 from src.core.exceptions import PayPalDisputeEngineException
@@ -23,7 +25,7 @@ class TenantManager:
 
     def __init__(self) -> None:
         self._tenants: dict[str, TenantConfig] = {}
-        # Seed default default tenant from environment
+        # Seed default tenant from environment
         settings = get_settings()
         default_tenant = TenantConfig(
             merchant_id="default-merchant",
@@ -37,6 +39,44 @@ class TenantManager:
             ),
         )
         self._tenants["default-merchant"] = default_tenant
+
+    async def sync_from_db(self) -> None:
+        """Loads all persistent tenants from the database into the runtime registry using direct SQLite."""
+        try:
+            import sqlite3
+            conn = sqlite3.connect("lexishield.db", timeout=5.0)
+            c = conn.cursor()
+            rows = c.execute("""
+                SELECT merchant_id, name, paypal_client_id, paypal_client_secret, paypal_webhook_id,
+                       accounting_webhook_url, rma_enabled, hitl_order_value_threshold,
+                       defend_p_win_threshold, auto_concede_unwinnable, visa_ce3_enabled,
+                       alert_auto_refund_enabled, is_active
+                FROM tenants
+            """).fetchall()
+            conn.close()
+
+            for r in rows:
+                self._tenants[r[0]] = TenantConfig(
+                    merchant_id=r[0],
+                    name=r[1],
+                    paypal_client_id=r[2],
+                    paypal_client_secret=r[3],
+                    paypal_webhook_id=r[4],
+                    accounting_webhook_url=r[5],
+                    rma_enabled=bool(r[6]),
+                    custom_rules=TenantCustomRules(
+                        hitl_order_value_threshold=float(r[7]),
+                        defend_p_win_threshold=float(r[8]),
+                        auto_concede_unwinnable=bool(r[9]),
+                        visa_ce3_enabled=bool(r[10]),
+                        alert_auto_refund_enabled=bool(r[11]),
+                    ),
+                    is_active=bool(r[12]),
+                )
+            if rows:
+                logger.info(f"Synchronized {len(rows)} tenants from database.")
+        except Exception as exc:
+            logger.warning(f"Tenant database sync notice: {exc}")
 
     def register_tenant(self, config: TenantConfig) -> TenantConfig:
         """Onboard a new merchant tenant with their own PayPal credentials and custom rules."""

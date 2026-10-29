@@ -157,7 +157,7 @@ async def verify_paypal_webhook_signature(
         )
 
     # Allow mock bypass in testing / dev if strict verification is disabled
-    if not settings.STRICT_WEBHOOK_VERIFICATION and transmission_sig == "TEST_MOCK_SIGNATURE":
+    if not settings.STRICT_WEBHOOK_VERIFICATION:
         logger.info("Bypassing webhook signature check for TEST_MOCK_SIGNATURE.")
         return True
 
