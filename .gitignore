@@ -1,32 +1,126 @@
-# Python bytecode & cache
+# ==========================================
+# LexiShield Comprehensive .gitignore
+# ==========================================
+
+# ------------------------------------------
+# Environment & Secrets
+# ------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# ------------------------------------------
+# Python & Bytecode
+# ------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+bin/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# ------------------------------------------
+# Testing, Coverage & Linters
+# ------------------------------------------
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
-# Environment files
-.env
-.venv/
-env/
-venv/
-ENV/
+# ------------------------------------------
+# Node & Frontend (Vite / React)
+# ------------------------------------------
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+frontend/dist/
+frontend/dist-ssr/
+.eslintcache
+*.tsbuildinfo
 
-# Local databases
+# ------------------------------------------
+# Databases & Storage
+# ------------------------------------------
 *.db
+*.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+lexishield.db
 
-# Output dossiers (keep directory structure)
+# ------------------------------------------
+# Generated Artifacts & Dossiers
+# ------------------------------------------
 artifacts/dossiers/*.pdf
 !artifacts/dossiers/.gitkeep
+artifacts/scratch/
 
-# IDE
+# ------------------------------------------
+# Logs
+# ------------------------------------------
+logs/
+*.log
+*.log.*
+
+# ------------------------------------------
+# Operating System & Editors
+# ------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# IDEs & Editors
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 *.swp
-
-# Build artifacts
-*.egg-info/
-*.egg
+*.swo
+*.sublime-project
+*.sublime-workspace
