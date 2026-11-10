@@ -39,20 +39,26 @@ class WarehouseService:
 
         # Check SQLite lexishield.db for seeded warehouse QC scale weight and serials
         try:
-            import sqlite3
             import json
+            import sqlite3
+
             conn = sqlite3.connect("lexishield.db", timeout=3.0)
             c = conn.cursor()
-            row = c.execute("""
+            row = c.execute(
+                """
                 SELECT scale_measured_weight_kg, scanned_serials, order_date
                 FROM orders WHERE order_id = ? OR transaction_id = ?
-            """, (order_id, order_id)).fetchone()
+            """,
+                (order_id, order_id),
+            ).fetchone()
             conn.close()
 
             if row and row[0] is not None:
                 measured_kg = float(row[0])
                 serials = json.loads(row[1]) if row[1] else []
-                logger.info(f"Retrieved persistent Zapier warehouse QC for {order_id}: weight={measured_kg}kg, serials={serials}.")
+                logger.info(
+                    f"Retrieved persistent Zapier warehouse QC for {order_id}: weight={measured_kg}kg, serials={serials}."
+                )
                 return WarehouseFulfillmentInfo(
                     order_id=order_id,
                     pack_timestamp=row[2] or "2026-10-20T08:30:00Z",
@@ -61,8 +67,11 @@ class WarehouseService:
                     scale_measured_weight_kg=round(measured_kg, 3),
                     expected_weight_kg=round(measured_kg, 3),
                     weight_delta_percent=0.0,
-                    scanned_barcodes=[f"UPC-8892401-{order_id[-4:] if len(order_id) >= 4 else '1001'}"],
-                    scanned_serials=serials or [f"SN-LEXI-992014-{order_id[-4:] if len(order_id) >= 4 else 'A01'}"],
+                    scanned_barcodes=[
+                        f"UPC-8892401-{order_id[-4:] if len(order_id) >= 4 else '1001'}"
+                    ],
+                    scanned_serials=serials
+                    or [f"SN-LEXI-992014-{order_id[-4:] if len(order_id) >= 4 else 'A01'}"],
                     tamper_seal_id=f"SEAL-SECURE-{order_id[-6:] if len(order_id) >= 6 else '78910'}",
                     packing_station_photo_url=f"https://warehouse-telemetry.cdn.example.com/qc-photos/{order_id}_pack_station.jpg",
                     quality_inspection_passed=True,

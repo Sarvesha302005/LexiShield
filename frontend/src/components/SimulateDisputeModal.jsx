@@ -22,6 +22,11 @@ export default function SimulateDisputeModal({ onClose, onSimulate }) {
       setBuyerEmail('samantha.cole@outlook.com');
       setAmount('135.00');
       setItemTitle('Wireless Barcode Scanner (USB-C)');
+    } else if (s === 'billing') {
+      setBuyerName('Sophia Chen');
+      setBuyerEmail('sophia.chen@enterprise.io');
+      setAmount('79.00');
+      setItemTitle('LexiShield Security Suite (1-Seat Pro Annual)');
     } else {
       setBuyerName('Jordan Lee');
       setBuyerEmail('jordan.lee@techcorp.io');
@@ -30,46 +35,111 @@ export default function SimulateDisputeModal({ onClose, onSimulate }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
+    const reasonCode = scenario === 'unauthorized'
+      ? 'UNAUTHORISED'
+      : scenario === 'not_received'
+      ? 'MERCHANDISE_OR_SERVICE_NOT_RECEIVED'
+      : scenario === 'billing'
+      ? 'CANCELED_RECURRING_BILLING'
+      : 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED';
+
+    try {
+      const resp = await fetch('/api/v1/disputes/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: buyerName,
+          customer_email: buyerEmail,
+          reason: reasonCode,
+          stage: 'CLAIM',
+          amount: parseFloat(amount) || 199.99,
+        }),
+      });
+      if (resp.ok) {
+        const record = await resp.json();
+        const order = record.telemetry_order || {};
+        const carrier = record.telemetry_carrier || {};
+        onSimulate({
+          dispute_id: record.dispute_id,
+          buyer_email: record.customer_email || buyerEmail,
+          buyer_name: order.customer_name || buyerName,
+          amount: record.amount,
+          currency: record.currency || 'USD',
+          reason: record.reason,
+          stage: record.stage,
+          pipeline_status: record.pipeline_status,
+          win_probability: record.win_probability ?? 0.90,
+          created_at: record.created_at || new Date().toISOString(),
+          evidence_score: Math.round((record.win_probability ?? 0.90) * 100),
+          fee_saved: record.dispute_fee_applied || 15.0,
+          tracking_number: carrier.tracking_number || 'TRK-SIMULATED',
+          carrier: carrier.carrier_name || 'UPS',
+          device_ip: order.checkout_ip || '198.51.100.42',
+          device_hash: order.device_fingerprint || 'DEV-FINGERPRINT-LEXI',
+          buyer_sentiment: record.hitl_flagged ? 'HITL Review' : 'New Claim Ingested',
+          order_id: record.order_id || 'ORD-LIVE',
+          item_title: itemTitle,
+          ai_summary: record.rebuttal_statement || 'Synthesized horizontal agent rebuttal.',
+          action_taken: record.action_taken || 'PROVIDED_EVIDENCE_DOSSIER',
+          pdf_dossier_sha256: record.pdf_dossier_sha256 || null,
+          specialist_agent: record.specialist_agent || null,
+          persona_mode: record.persona_mode || null,
+          llm_tier_used: record.llm_tier_used || null,
+          reasoning_steps: record.reasoning_steps || [],
+          rma_number: record.rma_number || null,
+        });
+        setIsSubmitting(false);
+        onClose();
+        return;
+      }
+    } catch {
+      // Fallback cleanly to local preview simulation if backend is offline
+    }
+
     setTimeout(() => {
       const newDisputeId = `PP-D-${Math.floor(849300 + Math.random() * 900)}`;
-      const reasonCode = scenario === 'unauthorized' 
-        ? 'UNAUTHORIZED_TRANSACTION' 
-        : scenario === 'not_received' 
-        ? 'MERCHANDISE_OR_SERVICE_NOT_RECEIVED' 
-        : 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED';
-
+      const specialistMap = {
+        unauthorized: 'FraudAgent',
+        not_received: 'INRAgent',
+        billing: 'BillingAgent',
+        not_as_described: 'SNADAgent',
+      };
       const simulatedRecord = {
         dispute_id: newDisputeId,
         buyer_email: buyerEmail,
         buyer_name: buyerName,
         amount: parseFloat(amount) || 199.99,
-        currency: "USD",
+        currency: 'USD',
         reason: reasonCode,
-        stage: "CLAIM",
+        stage: 'CLAIM',
         pipeline_status: scenario === 'not_received' ? 'AUTO_NEGOTIATING' : 'DEFENDED',
-        win_probability: scenario === 'unauthorized' ? 0.96 : scenario === 'not_received' ? 0.91 : 0.78,
+        win_probability: scenario === 'unauthorized' ? 0.96 : scenario === 'not_received' ? 0.91 : scenario === 'billing' ? 0.92 : 0.78,
         created_at: new Date().toISOString(),
         evidence_score: 95,
         fee_saved: 15.0,
-        tracking_number: "1Z" + Math.random().toString().slice(2, 18),
-        carrier: "UPS Next Day Air",
-        device_ip: "64.233.160.1",
-        device_hash: "d41d8cd98f00b204",
-        buyer_sentiment: "New Claim Ingested",
+        tracking_number: '1Z' + Math.random().toString().slice(2, 18),
+        carrier: 'UPS Next Day Air',
+        device_ip: '64.233.160.1',
+        device_hash: 'd41d8cd98f00b204',
+        buyer_sentiment: 'New Claim Ingested',
         order_id: `SHP-${Math.floor(99300 + Math.random() * 500)}`,
         item_title: itemTitle,
-        ai_summary: `Autonomous pipeline triggered for ${reasonCode}. Telemetry verified matching carrier coordinates & device fingerprint hash. Rebuttal PDF dispatched to PayPal in 85s.`,
-        action_taken: "DEFEND_AUTONOMOUS"
+        ai_summary: `Horizontal agent (${specialistMap[scenario] || 'DisputeSupervisor'}) triggered for ${reasonCode}. Telemetry verified and PDF dossier compiled.`,
+        action_taken: 'DEFEND_AUTONOMOUS',
+        specialist_agent: specialistMap[scenario] || 'DisputeSupervisor',
+        persona_mode: 'ADVERSARIAL_LEGAL_DEFENSE',
+        llm_tier_used: 'TIER_3_DETERMINISTIC_HEURISTIC',
+        reasoning_steps: [],
       };
 
       onSimulate(simulatedRecord);
       setIsSubmitting(false);
       onClose();
-    }, 700);
+    }, 450);
   };
 
   return (
@@ -114,6 +184,7 @@ export default function SimulateDisputeModal({ onClose, onSimulate }) {
               <option value="unauthorized">Friendly Fraud (Unauthorized purchase by household member)</option>
               <option value="not_received">Item Not Received (Delivered to secure locker)</option>
               <option value="not_as_described">Item Not As Described (High-value return claim)</option>
+              <option value="billing">Canceled Recurring / SaaS Billing (Clickwrap + active sessions)</option>
             </select>
           </div>
 

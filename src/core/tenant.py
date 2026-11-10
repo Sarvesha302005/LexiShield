@@ -5,7 +5,6 @@ and persistent database synchronization per merchant.
 """
 
 import logging
-from sqlalchemy import select
 
 from src.core.config import get_settings
 from src.core.exceptions import PayPalDisputeEngineException
@@ -44,6 +43,7 @@ class TenantManager:
         """Loads all persistent tenants from the database into the runtime registry using direct SQLite."""
         try:
             import sqlite3
+
             conn = sqlite3.connect("lexishield.db", timeout=5.0)
             c = conn.cursor()
             rows = c.execute("""

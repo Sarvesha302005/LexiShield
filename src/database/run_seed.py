@@ -3,6 +3,7 @@ Database Initialization and Seeding Script.
 """
 
 import asyncio
+
 from src.database import engine, init_db, seed_db_if_empty
 
 
@@ -18,4 +19,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

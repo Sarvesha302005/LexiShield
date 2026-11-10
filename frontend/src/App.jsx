@@ -40,30 +40,40 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            // Map backend schema to UI format if needed
-            const mapped = data.map(item => ({
-              dispute_id: item.dispute_id,
-              buyer_email: item.evidence_dossier?.buyer_email || 'customer@lexishield.io',
-              buyer_name: item.evidence_dossier?.buyer_name || 'Verified Buyer',
-              amount: item.amount || 199.99,
-              currency: item.currency || 'USD',
-              reason: item.dispute_reason || 'UNAUTHORIZED_TRANSACTION',
-              stage: item.dispute_stage || 'CLAIM',
-              pipeline_status: item.pipeline_status || 'DEFENDED',
-              win_probability: item.win_probability || 0.92,
-              created_at: item.created_at || new Date().toISOString(),
-              evidence_score: item.evidence_score || 94,
-              fee_saved: 15.0,
-              tracking_number: item.evidence_dossier?.tracking_number || '1Z9999999999999999',
-              carrier: item.evidence_dossier?.carrier || 'UPS',
-              device_ip: item.evidence_dossier?.device_ip || '127.0.0.1',
-              device_hash: item.evidence_dossier?.device_hash || 'hash_verified',
-              buyer_sentiment: 'Active Case',
-              order_id: item.evidence_dossier?.order_id || 'SHP-LIVE',
-              item_title: item.evidence_dossier?.item_title || 'Commercial Electronics',
-              ai_summary: item.arbitration_decision?.rationale || 'Synthesized evidence rebuttal.',
-              action_taken: item.action_taken || 'DEFEND'
-            }));
+            const mapped = data.map(item => {
+              const order = item.telemetry_order || {};
+              const carrier = item.telemetry_carrier || {};
+              const firstLineItem = Array.isArray(order.line_items) && order.line_items[0];
+              return {
+                dispute_id: item.dispute_id,
+                buyer_email: item.customer_email || order.customer_email || 'customer@lexishield.io',
+                buyer_name: order.customer_name || 'Verified Buyer',
+                amount: item.amount ?? 199.99,
+                currency: item.currency || 'USD',
+                reason: item.reason || item.dispute_reason || 'UNAUTHORISED',
+                stage: item.stage || item.dispute_stage || 'CLAIM',
+                pipeline_status: item.pipeline_status || 'DEFENDED',
+                win_probability: item.win_probability ?? 0.92,
+                created_at: item.created_at || new Date().toISOString(),
+                evidence_score: Math.round((item.win_probability ?? 0.92) * 100),
+                fee_saved: item.dispute_fee_applied || 15.0,
+                tracking_number: carrier.tracking_number || '1Z9999999999999999',
+                carrier: carrier.carrier_name || 'UPS',
+                device_ip: order.checkout_ip || '198.51.100.42',
+                device_hash: order.device_fingerprint || 'DEV-FINGERPRINT-LEXI',
+                buyer_sentiment: item.hitl_flagged ? 'HITL Review' : 'Active Case',
+                order_id: item.order_id || order.order_id || 'SHP-LIVE',
+                item_title: firstLineItem?.name || 'Commercial Electronics',
+                ai_summary: item.rebuttal_statement || 'Synthesized evidence rebuttal.',
+                action_taken: item.action_taken || 'DEFEND',
+                pdf_dossier_sha256: item.pdf_dossier_sha256 || null,
+                specialist_agent: item.specialist_agent || null,
+                persona_mode: item.persona_mode || null,
+                llm_tier_used: item.llm_tier_used || null,
+                reasoning_steps: item.reasoning_steps || [],
+                rma_number: item.rma_number || null,
+              };
+            });
             setDisputes(prev => {
               // Combine unique by dispute_id
               const existingIds = new Set(prev.map(d => d.dispute_id));

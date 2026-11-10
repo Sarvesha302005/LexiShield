@@ -45,17 +45,21 @@ class OrderDBService:
 
         # Check SQLite lexishield.db for seeded CustomerOrderModel
         try:
-            import sqlite3
             import json
+            import sqlite3
+
             conn = sqlite3.connect("lexishield.db", timeout=3.0)
             c = conn.cursor()
-            row = c.execute("""
+            row = c.execute(
+                """
                 SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
                        order_date, total_amount, currency, shipping_address, line_items,
                        scanned_serials, past_orders_count, past_disputes_count
                 FROM orders 
                 WHERE order_id = ? OR transaction_id = ? OR customer_email = ? OR customer_name = ?
-            """, (lookup_key, lookup_key, customer_email or lookup_key, customer_name or lookup_key)).fetchone()
+            """,
+                (lookup_key, lookup_key, customer_email or lookup_key, customer_name or lookup_key),
+            ).fetchone()
             conn.close()
 
             if row:
@@ -68,7 +72,8 @@ class OrderDBService:
                         name=item.get("name", "Product"),
                         quantity=int(item.get("quantity", 1)),
                         unit_price=float(item.get("price", item.get("unit_price", row[6]))),
-                        total_price=float(item.get("price", item.get("unit_price", row[6]))) * int(item.get("quantity", 1)),
+                        total_price=float(item.get("price", item.get("unit_price", row[6])))
+                        * int(item.get("quantity", 1)),
                         serial_number=serials[0] if serials else None,
                     )
                     for item in raw_items

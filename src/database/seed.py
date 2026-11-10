@@ -4,21 +4,9 @@ via Zapier orchestration, alongside multi-stage dispute dossiers, merchant tenan
 pre-chargeback alerts, and double-entry ERP accounting ledgers.
 """
 
-from datetime import datetime, timezone
-import json
 import logging
-import sqlite3
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models import (
-    AccountingEventModel,
-    CustomerOrderModel,
-    DisputeModel,
-    PreDisputeAlertModel,
-    TenantModel,
-)
-from src.database.session import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +23,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 249.99,
         "currency": "USD",
         "shipping_address": "450 Sunset Blvd, Suite 210, Los Angeles, CA 90028",
-        "line_items": [{"sku": "BOSE-QC45-BLK", "name": "Bose QuietComfort 45 Noise Cancelling Headphones", "quantity": 1, "price": 249.99}],
+        "line_items": [
+            {
+                "sku": "BOSE-QC45-BLK",
+                "name": "Bose QuietComfort 45 Noise Cancelling Headphones",
+                "quantity": 1,
+                "price": 249.99,
+            }
+        ],
         "carrier_name": "UPS Next Day Air",
         "tracking_number": "1Z9999999999999999",
         "delivery_status": "DELIVERED",
@@ -59,7 +54,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 849.00,
         "currency": "USD",
         "shipping_address": "100 Innovation Way, Austin, TX 78701",
-        "line_items": [{"sku": "ASUS-ROG-34X", "name": "ASUS ROG Swift 34\" Ultrawide Gaming Monitor", "quantity": 1, "price": 849.00}],
+        "line_items": [
+            {
+                "sku": "ASUS-ROG-34X",
+                "name": 'ASUS ROG Swift 34" Ultrawide Gaming Monitor',
+                "quantity": 1,
+                "price": 849.00,
+            }
+        ],
         "carrier_name": "FedEx Priority",
         "tracking_number": "FDX-998822011",
         "delivery_status": "DELIVERED",
@@ -83,7 +85,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 349.00,
         "currency": "USD",
         "shipping_address": "1200 Grand Avenue, Seattle, WA 98101",
-        "line_items": [{"sku": "SHURE-SM7B", "name": "Shure SM7B Vocal Dynamic Studio Microphone", "quantity": 1, "price": 349.00}],
+        "line_items": [
+            {
+                "sku": "SHURE-SM7B",
+                "name": "Shure SM7B Vocal Dynamic Studio Microphone",
+                "quantity": 1,
+                "price": 349.00,
+            }
+        ],
         "carrier_name": "UPS Ground",
         "tracking_number": "UPS-1Z99999903",
         "delivery_status": "DELIVERED",
@@ -107,7 +116,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 299.99,
         "currency": "USD",
         "shipping_address": "250 West 57th St, New York, NY 10107",
-        "line_items": [{"sku": "SONY-WH1000XM5", "name": "Sony WH-1000XM5 Wireless Headphones", "quantity": 1, "price": 299.99}],
+        "line_items": [
+            {
+                "sku": "SONY-WH1000XM5",
+                "name": "Sony WH-1000XM5 Wireless Headphones",
+                "quantity": 1,
+                "price": 299.99,
+            }
+        ],
         "carrier_name": "FedEx Home Delivery",
         "tracking_number": "FDX-771940022",
         "delivery_status": "DELIVERED",
@@ -131,7 +147,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 79.00,
         "currency": "USD",
         "shipping_address": "Cloud Delivery / 500 Howard St, San Francisco, CA 94105",
-        "line_items": [{"sku": "SAAS-PRO-ANNUAL", "name": "LexiShield Security Suite (1-Seat Pro Annual)", "quantity": 1, "price": 79.00}],
+        "line_items": [
+            {
+                "sku": "SAAS-PRO-ANNUAL",
+                "name": "LexiShield Security Suite (1-Seat Pro Annual)",
+                "quantity": 1,
+                "price": 79.00,
+            }
+        ],
         "carrier_name": "Digital Fulfillment",
         "tracking_number": "DIGITAL-LIC-55210",
         "delivery_status": "DELIVERED",
@@ -155,7 +178,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 35.00,
         "currency": "USD",
         "shipping_address": "55 Elm Street, Chicago, IL 60601",
-        "line_items": [{"sku": "CERAMIC-MUG-SHIELD", "name": "Artisan Ceramic Insulated Mug (Limited Edition)", "quantity": 1, "price": 35.00}],
+        "line_items": [
+            {
+                "sku": "CERAMIC-MUG-SHIELD",
+                "name": "Artisan Ceramic Insulated Mug (Limited Edition)",
+                "quantity": 1,
+                "price": 35.00,
+            }
+        ],
         "carrier_name": "USPS Priority",
         "tracking_number": "USPS-940011189956",
         "delivery_status": "DELIVERED",
@@ -179,7 +209,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 219.00,
         "currency": "USD",
         "shipping_address": "77 Massachusetts Ave, Cambridge, MA 02139",
-        "line_items": [{"sku": "KEYCHRON-Q1-PRO", "name": "Keychron Q1 Pro Wireless Custom Mechanical Keyboard", "quantity": 1, "price": 219.00}],
+        "line_items": [
+            {
+                "sku": "KEYCHRON-Q1-PRO",
+                "name": "Keychron Q1 Pro Wireless Custom Mechanical Keyboard",
+                "quantity": 1,
+                "price": 219.00,
+            }
+        ],
         "carrier_name": "UPS Ground",
         "tracking_number": "1Z99999911024001",
         "delivery_status": "DELIVERED",
@@ -203,7 +240,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 1099.00,
         "currency": "USD",
         "shipping_address": "1200 Brickell Ave, Suite 1400, Miami, FL 33131",
-        "line_items": [{"sku": "DJI-MINI-4PRO-COMBO", "name": "DJI Mini 4 Pro Drone Fly More Combo (RC 2)", "quantity": 1, "price": 1099.00}],
+        "line_items": [
+            {
+                "sku": "DJI-MINI-4PRO-COMBO",
+                "name": "DJI Mini 4 Pro Drone Fly More Combo (RC 2)",
+                "quantity": 1,
+                "price": 1099.00,
+            }
+        ],
         "carrier_name": "FedEx Priority",
         "tracking_number": "FDX-449912345001",
         "delivery_status": "DELIVERED",
@@ -227,7 +271,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 999.95,
         "currency": "USD",
         "shipping_address": "1701 Wynkoop St, Denver, CO 80202",
-        "line_items": [{"sku": "BREVILLE-TOUCH", "name": "Breville Barista Touch Espresso Machine", "quantity": 1, "price": 999.95}],
+        "line_items": [
+            {
+                "sku": "BREVILLE-TOUCH",
+                "name": "Breville Barista Touch Espresso Machine",
+                "quantity": 1,
+                "price": 999.95,
+            }
+        ],
         "carrier_name": "UPS Next Day Air",
         "tracking_number": "1Z99999913890002",
         "delivery_status": "DELIVERED",
@@ -251,7 +302,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 479.00,
         "currency": "USD",
         "shipping_address": "888 SW 5th Ave, Portland, OR 97204",
-        "line_items": [{"sku": "APPL-AP-MAX-BLK", "name": "Apple AirPods Max Wireless Over-Ear Headphones (Space Gray)", "quantity": 1, "price": 479.00}],
+        "line_items": [
+            {
+                "sku": "APPL-AP-MAX-BLK",
+                "name": "Apple AirPods Max Wireless Over-Ear Headphones (Space Gray)",
+                "quantity": 1,
+                "price": 479.00,
+            }
+        ],
         "carrier_name": "FedEx Home Delivery",
         "tracking_number": "FDX-882214562003",
         "delivery_status": "DELIVERED",
@@ -275,7 +333,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 1395.00,
         "currency": "USD",
         "shipping_address": "1180 Peachtree St NE, Atlanta, GA 30309",
-        "line_items": [{"sku": "HM-AERON-B-GRY", "name": "Herman Miller Aeron Ergonomic Office Chair (Size B)", "quantity": 1, "price": 1395.00}],
+        "line_items": [
+            {
+                "sku": "HM-AERON-B-GRY",
+                "name": "Herman Miller Aeron Ergonomic Office Chair (Size B)",
+                "quantity": 1,
+                "price": 1395.00,
+            }
+        ],
         "carrier_name": "FedEx Freight Direct",
         "tracking_number": "FDX-FRT-15901882",
         "delivery_status": "DELIVERED",
@@ -299,7 +364,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 599.99,
         "currency": "USD",
         "shipping_address": "500 West Broadway, San Diego, CA 92101",
-        "line_items": [{"sku": "GOPRO-HERO12-CREATOR", "name": "GoPro HERO12 Black Creator Edition Bundle", "quantity": 1, "price": 599.99}],
+        "line_items": [
+            {
+                "sku": "GOPRO-HERO12-CREATOR",
+                "name": "GoPro HERO12 Black Creator Edition Bundle",
+                "quantity": 1,
+                "price": 599.99,
+            }
+        ],
         "carrier_name": "UPS 2nd Day Air",
         "tracking_number": "1Z99999916782004",
         "delivery_status": "DELIVERED",
@@ -323,7 +395,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 749.99,
         "currency": "USD",
         "shipping_address": "250 Nicollet Mall, Minneapolis, MN 55401",
-        "line_items": [{"sku": "DYSON-V15-DETECT", "name": "Dyson V15 Detect Absolute Cordless Vacuum", "quantity": 1, "price": 749.99}],
+        "line_items": [
+            {
+                "sku": "DYSON-V15-DETECT",
+                "name": "Dyson V15 Detect Absolute Cordless Vacuum",
+                "quantity": 1,
+                "price": 749.99,
+            }
+        ],
         "carrier_name": "FedEx Ground",
         "tracking_number": "FDX-553317430005",
         "delivery_status": "DELIVERED",
@@ -347,7 +426,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 699.00,
         "currency": "USD",
         "shipping_address": "150 4th Ave N, Nashville, TN 37219",
-        "line_items": [{"sku": "RODE-CASTER-PRO2", "name": "Rode RodeCaster Pro II Audio Production Studio", "quantity": 1, "price": 699.00}],
+        "line_items": [
+            {
+                "sku": "RODE-CASTER-PRO2",
+                "name": "Rode RodeCaster Pro II Audio Production Studio",
+                "quantity": 1,
+                "price": 699.00,
+            }
+        ],
         "carrier_name": "UPS Ground",
         "tracking_number": "1Z99999918911006",
         "delivery_status": "DELIVERED",
@@ -371,7 +457,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 1699.00,
         "currency": "USD",
         "shipping_address": "1735 Market St, Philadelphia, PA 19103",
-        "line_items": [{"sku": "FUJI-XT5-BLK", "name": "Fujifilm X-T5 Mirrorless Camera Body (Black)", "quantity": 1, "price": 1699.00}],
+        "line_items": [
+            {
+                "sku": "FUJI-XT5-BLK",
+                "name": "Fujifilm X-T5 Mirrorless Camera Body (Black)",
+                "quantity": 1,
+                "price": 1699.00,
+            }
+        ],
         "carrier_name": "FedEx Priority",
         "tracking_number": "FDX-991119254007",
         "delivery_status": "DELIVERED",
@@ -395,7 +488,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 799.00,
         "currency": "USD",
         "shipping_address": "201 E Washington St, Phoenix, AZ 85004",
-        "line_items": [{"sku": "SONOS-ARC-BLK", "name": "Sonos Arc Premium Smart Soundbar (Black)", "quantity": 1, "price": 799.00}],
+        "line_items": [
+            {
+                "sku": "SONOS-ARC-BLK",
+                "name": "Sonos Arc Premium Smart Soundbar (Black)",
+                "quantity": 1,
+                "price": 799.00,
+            }
+        ],
         "carrier_name": "UPS Ground",
         "tracking_number": "1Z99999920481008",
         "delivery_status": "DELIVERED",
@@ -419,7 +519,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 799.00,
         "currency": "USD",
         "shipping_address": "2000 McKinney Ave, Dallas, TX 75201",
-        "line_items": [{"sku": "APPL-WATCH-U2", "name": "Apple Watch Ultra 2 GPS + Cellular 49mm Titanium", "quantity": 1, "price": 799.00}],
+        "line_items": [
+            {
+                "sku": "APPL-WATCH-U2",
+                "name": "Apple Watch Ultra 2 GPS + Cellular 49mm Titanium",
+                "quantity": 1,
+                "price": 799.00,
+            }
+        ],
         "carrier_name": "FedEx 2Day",
         "tracking_number": "FDX-331121763009",
         "delivery_status": "DELIVERED",
@@ -444,8 +551,18 @@ ZAPIER_ORDERS_DATA = [
         "currency": "USD",
         "shipping_address": "301 S Tryon St, Charlotte, NC 28202",
         "line_items": [
-            {"sku": "ELGATO-STREAM-XL", "name": "Elgato Stream Deck XL (32 Keys)", "quantity": 1, "price": 249.99},
-            {"sku": "ELGATO-WAVE3", "name": "Elgato Wave:3 Premium USB Microphone", "quantity": 1, "price": 139.99}
+            {
+                "sku": "ELGATO-STREAM-XL",
+                "name": "Elgato Stream Deck XL (32 Keys)",
+                "quantity": 1,
+                "price": 249.99,
+            },
+            {
+                "sku": "ELGATO-WAVE3",
+                "name": "Elgato Wave:3 Premium USB Microphone",
+                "quantity": 1,
+                "price": 139.99,
+            },
         ],
         "carrier_name": "UPS Ground",
         "tracking_number": "1Z99999922894010",
@@ -470,7 +587,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 649.00,
         "currency": "USD",
         "shipping_address": "111 S Main St, Salt Lake City, UT 84111",
-        "line_items": [{"sku": "ANKER-SOLIX-C1000", "name": "Anker SOLIX C1000 Portable Power Station (1056Wh)", "quantity": 1, "price": 649.00}],
+        "line_items": [
+            {
+                "sku": "ANKER-SOLIX-C1000",
+                "name": "Anker SOLIX C1000 Portable Power Station (1056Wh)",
+                "quantity": 1,
+                "price": 649.00,
+            }
+        ],
         "carrier_name": "FedEx Ground",
         "tracking_number": "FDX-774423419011",
         "delivery_status": "DELIVERED",
@@ -494,7 +618,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 899.99,
         "currency": "USD",
         "shipping_address": "3799 S Las Vegas Blvd, Las Vegas, NV 89109",
-        "line_items": [{"sku": "GARMIN-EPIX-PRO", "name": "Garmin epix Pro Gen 2 Sapphire 51mm Multisport GPS", "quantity": 1, "price": 899.99}],
+        "line_items": [
+            {
+                "sku": "GARMIN-EPIX-PRO",
+                "name": "Garmin epix Pro Gen 2 Sapphire 51mm Multisport GPS",
+                "quantity": 1,
+                "price": 899.99,
+            }
+        ],
         "carrier_name": "UPS 2nd Day Air",
         "tracking_number": "1Z99999924582012",
         "delivery_status": "DELIVERED",
@@ -518,7 +649,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 499.95,
         "currency": "USD",
         "shipping_address": "1 Monument Circle, Indianapolis, IN 46204",
-        "line_items": [{"sku": "SENN-HD660S2", "name": "Sennheiser HD 660S2 Open-Back Dynamic Headphones", "quantity": 1, "price": 499.95}],
+        "line_items": [
+            {
+                "sku": "SENN-HD660S2",
+                "name": "Sennheiser HD 660S2 Open-Back Dynamic Headphones",
+                "quantity": 1,
+                "price": 499.95,
+            }
+        ],
         "carrier_name": "DHL Express",
         "tracking_number": "DHL-9922256701",
         "delivery_status": "DELIVERED",
@@ -542,7 +680,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 289.95,
         "currency": "USD",
         "shipping_address": "175 S 3rd St, Columbus, OH 43215",
-        "line_items": [{"sku": "PEAK-BACKPACK-30L", "name": "Peak Design Everyday Backpack 30L v2 (Black)", "quantity": 1, "price": 289.95}],
+        "line_items": [
+            {
+                "sku": "PEAK-BACKPACK-30L",
+                "name": "Peak Design Everyday Backpack 30L v2 (Black)",
+                "quantity": 1,
+                "price": 289.95,
+            }
+        ],
         "carrier_name": "USPS Priority",
         "tracking_number": "USPS-94001118268150",
         "delivery_status": "DELIVERED",
@@ -566,7 +711,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 195.00,
         "currency": "USD",
         "shipping_address": "421 Fayetteville St, Raleigh, NC 27601",
-        "line_items": [{"sku": "FELLOW-STAGG-PRO", "name": "Fellow Stagg EKG Pro Electric Pour-Over Kettle (Matte Black)", "quantity": 1, "price": 195.00}],
+        "line_items": [
+            {
+                "sku": "FELLOW-STAGG-PRO",
+                "name": "Fellow Stagg EKG Pro Electric Pour-Over Kettle (Matte Black)",
+                "quantity": 1,
+                "price": 195.00,
+            }
+        ],
         "carrier_name": "UPS Ground",
         "tracking_number": "1Z99999927943013",
         "delivery_status": "DELIVERED",
@@ -590,7 +742,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 399.00,
         "currency": "USD",
         "shipping_address": "1200 Main St, Kansas City, MO 64105",
-        "line_items": [{"sku": "OURA-GEN3-HORIZON", "name": "Oura Ring Gen3 Horizon Smart Ring (Size 10, Stealth)", "quantity": 1, "price": 399.00}],
+        "line_items": [
+            {
+                "sku": "OURA-GEN3-HORIZON",
+                "name": "Oura Ring Gen3 Horizon Smart Ring (Size 10, Stealth)",
+                "quantity": 1,
+                "price": 399.00,
+            }
+        ],
         "carrier_name": "FedEx 2Day",
         "tracking_number": "FDX-112228319014",
         "delivery_status": "DELIVERED",
@@ -614,7 +773,14 @@ ZAPIER_ORDERS_DATA = [
         "total_amount": 379.99,
         "currency": "USD",
         "shipping_address": "1001 Woodward Ave, Detroit, MI 48226",
-        "line_items": [{"sku": "MARSHALL-STANMORE3", "name": "Marshall Stanmore III Wireless Bluetooth Speaker (Black)", "quantity": 1, "price": 379.99}],
+        "line_items": [
+            {
+                "sku": "MARSHALL-STANMORE3",
+                "name": "Marshall Stanmore III Wireless Bluetooth Speaker (Black)",
+                "quantity": 1,
+                "price": 379.99,
+            }
+        ],
         "carrier_name": "UPS Ground",
         "tracking_number": "1Z99999929502015",
         "delivery_status": "DELIVERED",
@@ -634,4 +800,3 @@ async def seed_db_if_empty(session: AsyncSession | None = None) -> bool:
     """Convenience alias for lifespan initialization."""
     # SQLite direct seeding ensures instant, zero-lock population
     return True
-

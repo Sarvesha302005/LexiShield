@@ -73,15 +73,53 @@ export default function DossierModal({ dispute, onClose }) {
           </div>
 
           {/* AI Synthesis Summary */}
-          <div className="p-4 rounded-2xl bg-sky-950/20 border border-sky-500/20">
-            <div className="flex items-center gap-2 mb-2 text-sky-400 font-semibold text-xs">
-              <Sparkles className="w-4 h-4" />
-              <span>Multimodal AI Evaluation Summary</span>
+          <div className="p-4 rounded-2xl bg-sky-950/20 border border-sky-500/20 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sky-400 font-semibold text-xs">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <span>Horizontal Specialist Agent Evaluation</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                {dispute.specialist_agent && (
+                  <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                    {dispute.specialist_agent}
+                  </span>
+                )}
+                {dispute.persona_mode && (
+                  <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {dispute.persona_mode}
+                  </span>
+                )}
+                {dispute.llm_tier_used && (
+                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                    {dispute.llm_tier_used}
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
               {dispute.ai_summary}
             </p>
+            {dispute.pdf_dossier_sha256 && (
+              <div className="pt-2 border-t border-sky-500/15 flex items-center gap-2 text-[10px] font-mono text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">PDF SHA-256: {dispute.pdf_dossier_sha256}</span>
+              </div>
+            )}
           </div>
+
+          {Array.isArray(dispute.reasoning_steps) && dispute.reasoning_steps.length > 0 && (
+            <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800 space-y-1.5">
+              <h4 className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                Agent Chain-of-Thought Audit Trace
+              </h4>
+              <ul className="space-y-1 text-[11px] text-slate-300 font-mono">
+                {dispute.reasoning_steps.map((step, idx) => (
+                  <li key={idx} className="leading-relaxed">• {step}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Telemetry Evidence Pillars */}
           <div className="space-y-3">
