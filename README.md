@@ -10,7 +10,7 @@
 [![CI Pipeline](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml)
 [![CodeQL Security](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml)
 [![Docker Build](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml)
-[![Tests](https://img.shields.io/badge/Tests-39%20Passed%20(88%25%20cov)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-56%20Passed%20(86%25%20cov)-brightgreen.svg)]()
 
 **LexiShield** is an autonomous chargeback defense and dispute deflection engine built on Python 3.12+, FastAPI, Pydantic v2, and AsyncIO. It transitions dispute resolution from a passive pipeline into an active, multi-layered financial defense shield.
 
@@ -35,15 +35,17 @@ flowchart LR
         CRM["Order DB & LTV<br/>Customer Ledger & IPs"]
     end
 
-    subgraph S3 ["3. AI & Compliance Core"]
+    subgraph S3 ["3. Horizontal Agentic AI & Compliance"]
         COMPL["Policy Guardrails<br/>$750+ Sig & AVS Match"]
         CE3["Visa CE 3.0 Engine<br/>2-Factor IP/Device Match"]
-        GEMINI["Gemini 1.5 Multimodal<br/>Vision & EV Optimization"]
+        SUP["DisputeSupervisor<br/>Seller Rights First + EV"]
+        SPEC["Domain Specialists<br/>INR / SNAD / Fraud / Billing"]
+        LLM["3-Tier OpenRouter<br/>Gemini 2.0 Thinking → Llama 70B → Heuristics"]
     end
 
     subgraph S4 ["4. Adjudication & Ledger"]
-        PDF["ReportLab Engine<br/>Evidence PDF Dossier"]
-        BOT["Inquiry Bot Ladder<br/>Courtesy Settlement"]
+        PDF["ReportLab + SHA-256<br/>Cryptographic PDF Dossier"]
+        BOT["Stage-Aware Personas<br/>Customer Diplomat / Legal Defense"]
         API["PayPal REST APIs<br/><code>provide-evidence / refund</code>"]
         ERP["ERP Sync & RMA<br/>NetSuite / QuickBooks"]
     end
@@ -63,8 +65,8 @@ flowchart LR
 | :--- | :--- | :--- |
 | **1. Ingress & Deflection** | Ingests PayPal dispute webhooks and pre-chargeback alerts (Ethoca / Verifi) 20–72h prior to posting. Executes automated zero-fee refunds to eliminate $15–$30 dispute fees and preserve dispute ratios. | FastAPI, Cryptography (RSA/X.509), Pydantic v2 |
 | **2. Telemetry Mesh** | Executes parallel, asynchronous queries across carrier APIs (FedEx, UPS, USPS), warehouse scale sensors (weight variance & barcode scans), and customer history. | AsyncIO (`asyncio.gather`), Carrier Connectors |
-| **3. AI & Compliance Core** | Enforces PayPal Seller Protection policies ($750+ signature mandate, AVS token match), evaluates Visa CE 3.0 2-factor matches, and runs Gemini 1.5 multimodal arbitration to optimize Expected Value $E[V]$. | Google Gemini 1.5 Pro, Visa Core Rule 10.4 |
-| **4. Adjudication & Ledger** | Auto-generates ReportLab PDF legal dossiers for claims, engages buyers via a 3-turn conversational bot during inquiries, dispatches to PayPal REST endpoints, and syncs double-entry ERP ledgers. | ReportLab PDF Engine, PayPal REST API, ERP Webhooks |
+| **3. Horizontal Agentic AI & Compliance** | Routes disputes via `DisputeSupervisor` to domain specialists (`INRAgent`, `SNADAgent`, `FraudAgent`, `BillingAgent`), enforces PayPal §11 & Visa CE 3.0, applies **Seller Rights First** universal defense, and runs 3-tier LangChain/OpenRouter orchestration (Gemini 2.0 Flash Thinking -> Llama 3.3 70B -> Heuristics). | LangChain, OpenRouter (Gemini 2.0 Thinking / Llama 3.3 70B), Visa CE 3.0 |
+| **4. Adjudication & Ledger** | Applies Stage-Aware Dynamic Personas (`Customer Diplomat` vs `Adversarial Legal Defense`), compiles cryptographic ReportLab PDF dossiers with SHA-256 integrity hashes logged in the audit trail, dispatches to PayPal REST endpoints, and syncs double-entry ERP ledgers. | ReportLab PDF + SHA-256, PayPal REST API, ERP Webhooks |
 
 ---
 
@@ -86,8 +88,8 @@ flowchart LR
 
 ### 4. Interactive Conversational Settlement Bot (Inquiry Stage)
 * **Autonomous Buyer Negotiation**: Multi-turn conversational state machine operating before PayPal steps in to arbitrate:
-  - *Turn 1 (Troubleshooting)*: Sends courier tracking links, verified GPS timestamps, and delivery verification steps.
-  - *Turn 2 (Courtesy Settlement)*: Offers a $20\%$ courtesy partial refund or free replacement reshipment for cosmetic or minor defect claims.
+  - *Turn 1 (Troubleshooting)*: Sends courier tracking links, verified GPS timestamps, and delivery verification steps via the **Customer Diplomat** persona.
+  - *Turn 2 (Courtesy Settlement)*: Offers a $50\%$ courtesy partial refund or free replacement reshipment when Seller Rights fail or troubleshooting requires escalation.
   - *Turn 3 (Arbitration Handover)*: Prepares full evidentiary defense if negotiations break down.
 
 ### 5. Multi-Tenant Enterprise SaaS Infrastructure
@@ -128,9 +130,17 @@ flowchart LR
 │   │   ├── schemas.py                   # Pydantic models for webhooks, telemetry & dispute records
 │   │   ├── arbitration.py               # AI output schemas (P(win), EV, strategy, citations)
 │   │   └── tenant.py                    # Multi-tenant schemas & custom rules
+│   ├── agents/
+│   │   ├── base.py                      # Stage-aware personas & BaseSpecialistAgent
+│   │   ├── supervisor.py                # DisputeSupervisor router, EV & Seller Rights First policy
+│   │   ├── inr_agent.py                 # Item Not Received (§11 safe harbor, GPS, $750 signature)
+│   │   ├── snad_agent.py                # Significantly Not As Described (0.0% weight delta, RMA)
+│   │   ├── fraud_agent.py               # Unauthorized & Friendly Fraud (Visa CE 3.0, AVS/CVV)
+│   │   └── billing_agent.py             # Canceled Recurring / SaaS Clickwrap & session telemetry
 │   ├── services/
 │   │   ├── carrier.py                   # Logistics telemetry aggregator (EasyPost/FedEx mock with GPS)
 │   │   ├── warehouse.py                 # Outbound packing telemetry (scale weights, barcode serials, photos)
+│   │   ├── billing.py                   # SaaS clickwrap ToS assent & post-cancellation server telemetry
 │   │   ├── order.py                     # Order database service & dispute fee tiering ($15 vs $30)
 │   │   ├── compliance.py                # $750+ signature mandate, AVS check, redirection detector
 │   │   ├── visa_ce3.py                  # Visa Compelling Evidence 3.0 pre-dispute matching engine
@@ -138,8 +148,9 @@ flowchart LR
 │   │   ├── conversation_bot.py          # Multi-turn conversational settlement bot (Inquiry stage)
 │   │   ├── accounting.py                # ERP double-entry ledger integration (NetSuite/QuickBooks)
 │   │   ├── rma.py                       # Automated return label & inbound inspection manager
-│   │   ├── llm_arbitrator.py            # Multimodal Gemini 1.5 + heuristic arbitration & EV calculation
-│   │   ├── pdf_generator.py             # ReportLab evidentiary rebuttal PDF builder with CE 3.0 schedule
+│   │   ├── llm_orchestrator.py          # 3-tier LangChain/OpenRouter engine (Gemini 2.0 -> Llama 70B -> Heuristics)
+│   │   ├── llm_arbitrator.py            # Backward-compatible facade over DisputeSupervisor
+│   │   ├── pdf_generator.py             # ReportLab evidentiary rebuttal PDF + SHA-256 integrity hash
 │   │   └── paypal_client.py             # Resilient async HTTP client for PayPal Disputes REST API
 │   ├── workflows/
 │   │   └── dispute_pipeline.py          # Orchestrator chaining Ingestion -> Telemetry -> Policy -> Dispatch
@@ -157,6 +168,9 @@ flowchart LR
     ├── test_visa_ce3.py                 # Tests for Visa CE 3.0 lookback & two-factor matching
     ├── test_advanced_features.py        # Tests for alert deflection, chat bot, ERP accounting, and RMA
     ├── test_arbitration_logic.py        # Tests for decision branching, P(win), and EV logic
+    ├── test_horizontal_agents.py        # Tests for DisputeSupervisor, specialist agents, and Seller Rights First
+    ├── test_llm_orchestrator.py         # Tests for 3-tier OpenRouter fallback & <thought> trace extraction
+    ├── test_pdf_integrity.py            # Tests for SHA-256 PDF integrity, Exhibit C SaaS & HITL upfront dossiers
     ├── test_webhook_security.py         # Tests for signature verification, SSRF & tampering
     └── test_end_to_end_pipeline.py      # End-to-end integration tests for all decision paths
 ```
@@ -196,7 +210,7 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 5. Running the Test Suite
 
-Execute the full suite of **39 tests** with coverage metrics:
+Execute the full suite of **56 tests** with coverage metrics:
 
 ```bash
 python -m pytest -v --cov=src --cov-report=term-missing
@@ -204,19 +218,21 @@ python -m pytest -v --cov=src --cov-report=term-missing
 
 ```text
 ============================= test session starts =============================
-platform win32 -- Python 3.13.7, pytest-8.4.2, pluggy-1.6.0
-collected 39 items
+collected 56 items
 
-tests/test_advanced_features.py .....                                    [ 12%]
-tests/test_arbitration_logic.py ........                                 [ 33%]
-tests/test_compliance_guardrails.py ...                                  [ 41%]
-tests/test_end_to_end_pipeline.py ............                           [ 71%]
-tests/test_visa_ce3.py ...                                               [ 79%]
+tests/test_advanced_features.py .....                                    [  8%]
+tests/test_arbitration_logic.py ........                                 [ 23%]
+tests/test_compliance_guardrails.py ...                                  [ 28%]
+tests/test_end_to_end_pipeline.py ............                           [ 50%]
+tests/test_horizontal_agents.py .......                                  [ 62%]
+tests/test_llm_orchestrator.py .....                                     [ 71%]
+tests/test_pdf_integrity.py .....                                        [ 80%]
+tests/test_visa_ce3.py ...                                               [ 85%]
 tests/test_webhook_security.py ........                                  [100%]
 
 =============================== tests coverage ================================
-Coverage: 88% across 1,486 statements
-============================= 39 passed in 3.76s ==============================
+Coverage: 86% across 2,525 statements
+============================= 56 passed in 2.47s ==============================
 ```
 
 ---
