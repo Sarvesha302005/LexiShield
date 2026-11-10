@@ -12,6 +12,7 @@ from src.core.exceptions import DisputeNotFoundError
 from src.core.tenant import TenantManager, get_tenant_manager
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
+    BillingTelemetryInfo,
     CarrierTrackingInfo,
     DisputeReason,
     DisputeRecord,
@@ -23,8 +24,10 @@ from src.models.schemas import (
     PayPalWebhookEvent,
     PipelineExecutionStatus,
     WarehouseFulfillmentInfo,
+    normalize_dispute_reason,
 )
 from src.services.accounting import AccountingIntegrationService
+from src.services.billing import BillingTelemetryService
 from src.services.carrier import CarrierService
 from src.services.compliance import ComplianceAuditResult, SellerProtectionComplianceEngine
 from src.services.conversation_bot import ConversationalSettlementBot, NegotiationStep
@@ -47,6 +50,7 @@ class DisputePipeline:
         carrier_service: CarrierService | None = None,
         warehouse_service: WarehouseService | None = None,
         order_service: OrderDBService | None = None,
+        billing_service: BillingTelemetryService | None = None,
         llm_arbitrator: LLMArbitrator | None = None,
         pdf_generator: PDFGenerator | None = None,
         paypal_client: PayPalClient | None = None,
@@ -61,6 +65,7 @@ class DisputePipeline:
         self.carrier_service = carrier_service or CarrierService()
         self.warehouse_service = warehouse_service or WarehouseService()
         self.order_service = order_service or OrderDBService()
+        self.billing_service = billing_service or BillingTelemetryService()
         self.llm_arbitrator = llm_arbitrator or LLMArbitrator()
         self.pdf_generator = pdf_generator or PDFGenerator()
         self.paypal_client = paypal_client or PayPalClient()
@@ -86,6 +91,7 @@ class DisputePipeline:
         try:
             import json
             import sqlite3
+
             conn = sqlite3.connect("lexishield.db", timeout=5.0)
             c = conn.cursor()
             rows = c.execute("""
@@ -95,7 +101,10 @@ class DisputePipeline:
                        hitl_flagged, hitl_reasons, rebuttal_statement, pdf_dossier_path,
                        paypal_api_response, compliance_eligible, compliance_disqualifications,
                        visa_ce3_qualified, rma_number, telemetry_carrier, telemetry_warehouse,
-                       audit_trail, created_at, updated_at
+                       audit_trail, created_at, updated_at, recommended_action,
+                       hitl_reviewed_by, hitl_override_action, pdf_dossier_sha256,
+                       specialist_agent, persona_mode, llm_tier_used, seller_rights_met,
+                       reasoning_steps, telemetry_order, telemetry_billing
                 FROM disputes
             """).fetchall()
             conn.close()
@@ -103,19 +112,13 @@ class DisputePipeline:
             for r in rows:
                 c_data = json.loads(r[23]) if r[23] else None
                 w_data = json.loads(r[24]) if r[24] else None
+                o_data = json.loads(r[37]) if r[37] else None
+                b_data = json.loads(r[38]) if r[38] else None
                 self._dispute_store[r[0]] = DisputeRecord(
                     dispute_id=r[0],
                     merchant_id=r[1],
                     stage=DisputeStage(r[2]),
-                    reason=(
-                        DisputeReason(r[3])
-                        if r[3] in [e.value for e in DisputeReason]
-                        else (
-                            DisputeReason.CANCELED_RECURRING_BILLING
-                            if "RECURRING" in r[3].upper()
-                            else DisputeReason.OTHER
-                        )
-                    ),
+                    reason=normalize_dispute_reason(r[3]),
                     amount=r[4],
                     currency=r[5],
                     seller_transaction_id=r[6],
@@ -125,41 +128,63 @@ class DisputePipeline:
                     win_probability=r[10],
                     expected_value=r[11],
                     dispute_fee_applied=r[12],
+                    recommended_action=r[28],
                     action_taken=r[13],
                     hitl_flagged=bool(r[14]),
                     hitl_reasons=json.loads(r[15]) if r[15] else [],
+                    hitl_reviewed_by=r[29],
+                    hitl_override_action=r[30],
                     rebuttal_statement=r[16],
                     pdf_dossier_path=r[17],
+                    pdf_dossier_sha256=r[31],
                     paypal_api_response=json.loads(r[18]) if r[18] else None,
                     compliance_eligible=bool(r[19]),
                     compliance_disqualifications=json.loads(r[20]) if r[20] else [],
                     visa_ce3_qualified=bool(r[21]),
                     rma_number=r[22],
-                    telemetry_carrier=CarrierTrackingInfo(
-                        tracking_number=c_data.get("tracking_number", "UNKNOWN"),
-                        carrier_name=c_data.get("carrier_name", "FedEx"),
-                        status=c_data.get("status", "DELIVERED"),
-                        ship_date=c_data.get("ship_date", "2026-10-15T09:00:00Z"),
-                        destination_address=c_data.get("destination_address", "Confirmed Address"),
-                        delivered_date=c_data.get("delivered_date"),
-                        signed_by=c_data.get("signed_by"),
-                        gps_latitude=c_data.get("gps_latitude"),
-                        gps_longitude=c_data.get("gps_longitude"),
-                    ) if c_data else None,
-                    telemetry_warehouse=WarehouseFulfillmentInfo(
-                        order_id=r[7] or r[0],
-                        pack_timestamp=w_data.get("pack_timestamp", "2026-10-15T08:30:00Z"),
-                        warehouse_id=w_data.get("warehouse_id", "WH-01"),
-                        packer_id=w_data.get("packer_id", "PACKER-01"),
-                        scale_measured_weight_kg=w_data.get("scale_measured_weight_kg", 1.40),
-                        expected_weight_kg=w_data.get("expected_weight_kg", 1.40),
-                        weight_delta_percent=w_data.get("weight_delta_percent", 0.0),
-                        scanned_serials=w_data.get("scanned_serials", []),
-                        tamper_seal_id=w_data.get("tamper_seal_id", "SEAL-001"),
-                        packing_station_photo_url=w_data.get("packing_station_photo_url", "artifacts/wh.jpg"),
-                        quality_inspection_passed=w_data.get("quality_inspection_passed", True),
-                    ) if w_data else None,
-                    telemetry_order=None,
+                    specialist_agent=r[32],
+                    persona_mode=r[33],
+                    llm_tier_used=r[34],
+                    seller_rights_met=bool(r[35]) if r[35] is not None else None,
+                    reasoning_steps=json.loads(r[36]) if r[36] else [],
+                    telemetry_carrier=(
+                        CarrierTrackingInfo(
+                            tracking_number=c_data.get("tracking_number", "UNKNOWN"),
+                            carrier_name=c_data.get("carrier_name", "FedEx"),
+                            status=c_data.get("status", "DELIVERED"),
+                            ship_date=c_data.get("ship_date", "2026-10-15T09:00:00Z"),
+                            destination_address=c_data.get(
+                                "destination_address", "Confirmed Address"
+                            ),
+                            delivered_date=c_data.get("delivered_date"),
+                            signed_by=c_data.get("signed_by"),
+                            gps_latitude=c_data.get("gps_latitude"),
+                            gps_longitude=c_data.get("gps_longitude"),
+                        )
+                        if c_data
+                        else None
+                    ),
+                    telemetry_warehouse=(
+                        WarehouseFulfillmentInfo(
+                            order_id=r[7] or r[0],
+                            pack_timestamp=w_data.get("pack_timestamp", "2026-10-15T08:30:00Z"),
+                            warehouse_id=w_data.get("warehouse_id", "WH-01"),
+                            packer_id=w_data.get("packer_id", "PACKER-01"),
+                            scale_measured_weight_kg=w_data.get("scale_measured_weight_kg", 1.40),
+                            expected_weight_kg=w_data.get("expected_weight_kg", 1.40),
+                            weight_delta_percent=w_data.get("weight_delta_percent", 0.0),
+                            scanned_serials=w_data.get("scanned_serials", []),
+                            tamper_seal_id=w_data.get("tamper_seal_id", "SEAL-001"),
+                            packing_station_photo_url=w_data.get(
+                                "packing_station_photo_url", "artifacts/wh.jpg"
+                            ),
+                            quality_inspection_passed=w_data.get("quality_inspection_passed", True),
+                        )
+                        if w_data
+                        else None
+                    ),
+                    telemetry_order=OrderCustomerInfo(**o_data) if o_data else None,
+                    telemetry_billing=BillingTelemetryInfo(**b_data) if b_data else None,
                     audit_trail=json.loads(r[25]) if r[25] else [],
                 )
             if rows:
@@ -172,49 +197,92 @@ class DisputePipeline:
         try:
             import json
             import sqlite3
+
             conn = sqlite3.connect("lexishield.db", timeout=5.0)
             c = conn.cursor()
-            c.execute("""
+            c.execute(
+                """
                 INSERT OR REPLACE INTO disputes (
                     dispute_id, merchant_id, stage, reason, amount, currency,
                     seller_transaction_id, order_id, customer_email, pipeline_status,
-                    action_taken, hitl_flagged, hitl_reasons, rebuttal_statement,
-                    pdf_dossier_path, paypal_api_response, compliance_eligible,
-                    compliance_disqualifications, visa_ce3_qualified, rma_number,
-                    telemetry_carrier, telemetry_warehouse, telemetry_order, audit_trail,
+                    recommended_action, action_taken, hitl_flagged, hitl_reasons,
+                    hitl_reviewed_by, hitl_override_action, rebuttal_statement,
+                    pdf_dossier_path, pdf_dossier_sha256, paypal_api_response,
+                    specialist_agent, persona_mode, llm_tier_used, seller_rights_met,
+                    reasoning_steps, compliance_eligible, compliance_disqualifications,
+                    visa_ce3_qualified, rma_number, telemetry_carrier,
+                    telemetry_warehouse, telemetry_order, telemetry_billing, audit_trail,
                     win_probability, expected_value, dispute_fee_applied, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                record.dispute_id,
-                record.merchant_id,
-                record.stage.value,
-                record.reason.value,
-                record.amount,
-                record.currency,
-                record.seller_transaction_id,
-                record.order_id,
-                record.customer_email,
-                record.pipeline_status.value,
-                record.action_taken,
-                1 if record.hitl_flagged else 0,
-                json.dumps(record.hitl_reasons),
-                record.rebuttal_statement,
-                record.pdf_dossier_path,
-                json.dumps(record.paypal_api_response) if record.paypal_api_response else None,
-                1 if (record.compliance_eligible is None or record.compliance_eligible) else 0,
-                json.dumps(record.compliance_disqualifications),
-                1 if record.visa_ce3_qualified else 0,
-                record.rma_number,
-                json.dumps(record.telemetry_carrier.model_dump()) if record.telemetry_carrier else None,
-                json.dumps(record.telemetry_warehouse.model_dump()) if record.telemetry_warehouse else None,
-                json.dumps(record.telemetry_order.model_dump()) if record.telemetry_order else None,
-                json.dumps(record.audit_trail),
-                record.win_probability,
-                record.expected_value,
-                record.dispute_fee_applied or 15.0,
-                record.created_at.isoformat() if hasattr(record.created_at, "isoformat") else str(record.created_at),
-                record.updated_at.isoformat() if hasattr(record.updated_at, "isoformat") else str(record.updated_at),
-            ))
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    record.dispute_id,
+                    record.merchant_id,
+                    record.stage.value,
+                    record.reason.value,
+                    record.amount,
+                    record.currency,
+                    record.seller_transaction_id,
+                    record.order_id,
+                    record.customer_email,
+                    record.pipeline_status.value,
+                    record.recommended_action,
+                    record.action_taken,
+                    1 if record.hitl_flagged else 0,
+                    json.dumps(record.hitl_reasons),
+                    record.hitl_reviewed_by,
+                    record.hitl_override_action,
+                    record.rebuttal_statement,
+                    record.pdf_dossier_path,
+                    record.pdf_dossier_sha256,
+                    json.dumps(record.paypal_api_response) if record.paypal_api_response else None,
+                    record.specialist_agent,
+                    record.persona_mode,
+                    record.llm_tier_used,
+                    None
+                    if record.seller_rights_met is None
+                    else (1 if record.seller_rights_met else 0),
+                    json.dumps(record.reasoning_steps),
+                    1 if (record.compliance_eligible is None or record.compliance_eligible) else 0,
+                    json.dumps(record.compliance_disqualifications),
+                    1 if record.visa_ce3_qualified else 0,
+                    record.rma_number,
+                    (
+                        json.dumps(record.telemetry_carrier.model_dump())
+                        if record.telemetry_carrier
+                        else None
+                    ),
+                    (
+                        json.dumps(record.telemetry_warehouse.model_dump())
+                        if record.telemetry_warehouse
+                        else None
+                    ),
+                    (
+                        json.dumps(record.telemetry_order.model_dump())
+                        if record.telemetry_order
+                        else None
+                    ),
+                    (
+                        json.dumps(record.telemetry_billing.model_dump())
+                        if record.telemetry_billing
+                        else None
+                    ),
+                    json.dumps(record.audit_trail),
+                    record.win_probability,
+                    record.expected_value,
+                    record.dispute_fee_applied or 15.0,
+                    (
+                        record.created_at.isoformat()
+                        if hasattr(record.created_at, "isoformat")
+                        else str(record.created_at)
+                    ),
+                    (
+                        record.updated_at.isoformat()
+                        if hasattr(record.updated_at, "isoformat")
+                        else str(record.updated_at)
+                    ),
+                ),
+            )
             conn.commit()
             conn.close()
         except Exception as exc:
@@ -360,9 +428,10 @@ class DisputePipeline:
                 customer_name=customer_name,
                 customer_email=customer_email,
             )
+            billing_task = self.billing_service.get_billing_telemetry(order_id=effective_order_id)
 
-            carrier_data, wh_data, order_data = await asyncio.gather(
-                carrier_task, wh_task, order_task
+            carrier_data, wh_data, order_data, billing_data = await asyncio.gather(
+                carrier_task, wh_task, order_task, billing_task
             )
         except Exception as exc:
             logger.error(f"[{correlation_id}] Failed gathering telemetry: {exc}")
@@ -395,7 +464,7 @@ class DisputePipeline:
         # 5. Determine Dispute Fee
         fee = self.order_service.determine_dispute_fee(order_data.merchant_monthly_disputes_count)
 
-        # 6. AI Arbitration & Financial Risk Evaluation
+        # 6. Horizontal Agentic AI Arbitration & Financial Risk Evaluation
         logger.info(f"[{correlation_id}] Executing AI arbitration for {dispute_id}...")
         decision: ArbitrationDecision = await self.llm_arbitrator.arbitrate(
             dispute=dispute,
@@ -405,38 +474,69 @@ class DisputePipeline:
             dispute_fee=fee,
             compliance=compliance_result,
             ce3=ce3_result,
+            billing=billing_data,
         )
 
         # Apply tenant custom threshold overrides
         if amount > tenant.custom_rules.hitl_order_value_threshold:
             decision.hitl_flagged = True
-            decision.hitl_reasons.append(
-                f"Tenant rule: Order value (${amount:.2f}) exceeds merchant threshold (${tenant.custom_rules.hitl_order_value_threshold:.2f})."
+            rule_reason = (
+                f"Tenant rule: Order value (${amount:.2f}) exceeds merchant threshold "
+                f"(${tenant.custom_rules.hitl_order_value_threshold:.2f})."
             )
+            if rule_reason not in decision.hitl_reasons:
+                decision.hitl_reasons.append(rule_reason)
 
-        # 7. Action Dispatching
+        # 7. Action Dispatching & Automated RMA Enforcement
         pipeline_status = PipelineExecutionStatus.ANALYZING
         action_taken = None
         api_response = None
         pdf_path = None
+        pdf_sha256: str | None = None
         rma_num = None
+
+        if (
+            dispute.dispute_reason == DisputeReason.MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED
+            and tenant.rma_enabled
+            and decision.seller_rights_met
+        ):
+            rma_details = self.rma_manager.generate_return_label(
+                order_id=effective_order_id,
+                dispute_id=dispute_id,
+                customer_name=order_data.customer_name,
+            )
+            rma_num = rma_details.rma_number
 
         if decision.hitl_flagged:
             pipeline_status = PipelineExecutionStatus.FLAGGED_HITL
             action_taken = "FLAGGED_FOR_HITL_REVIEW"
+            # Per Decision Matrix: Compile full dossier upfront for human sign-off on CLAIM+ disputes
+            if dispute.dispute_stage != DisputeStage.INQUIRY and (
+                decision.seller_rights_met or decision.win_probability >= 0.50
+            ):
+                _, pdf_sha256 = self.pdf_generator.generate_rebuttal_dossier_with_hash(
+                    dispute=dispute,
+                    decision=decision,
+                    carrier=carrier_data,
+                    warehouse=wh_data,
+                    order=order_data,
+                    compliance_result=compliance_result,
+                    ce3_result=ce3_result,
+                    billing_result=billing_data,
+                )
+                pdf_path = f"artifacts/dossiers/dispute_{dispute_id}_evidence.pdf"
             logger.info(
                 f"[{correlation_id}] Dispute {dispute_id} routed to HITL queue. Reasons: {decision.hitl_reasons}"
             )
 
-        # INQUIRY Stage: Conversational Settlement Bot
+        # INQUIRY Stage: Stage-Aware Customer Diplomat & Conversational Settlement Bot
         elif dispute.dispute_stage == DisputeStage.INQUIRY:
-            step, msg, offer_val = self.conversation_bot.advance_negotiation(
-                dispute=dispute,
-                carrier=carrier_data,
-                order=order_data,
-            )
-
-            if step == NegotiationStep.STEP_2_PARTIAL_REFUND and offer_val:
+            if decision.recommended_action == ArbitrationAction.MAKE_OFFER:
+                offer_val = decision.offer_amount or round(amount * 0.50, 2)
+                msg = (
+                    decision.customer_message
+                    or f"Hello {order_data.customer_name}, we would like to offer a 50% courtesy refund of ${offer_val:.2f}."
+                )
                 api_response = await self.paypal_client.make_offer(
                     dispute_id=dispute_id,
                     offer_amount=offer_val,
@@ -445,23 +545,41 @@ class DisputePipeline:
                 )
                 action_taken = f"BOT_OFFERED_PARTIAL_REFUND_${offer_val:.2f}"
             else:
-                api_response = await self.paypal_client.send_message(
-                    dispute_id=dispute_id,
-                    message=msg,
-                    correlation_id=correlation_id,
+                step, msg, bot_offer_val = self.conversation_bot.advance_negotiation(
+                    dispute=dispute,
+                    carrier=carrier_data,
+                    order=order_data,
+                    custom_step1_message=decision.customer_message,
                 )
-                action_taken = f"BOT_SENT_{step.value}"
+                if step == NegotiationStep.STEP_2_PARTIAL_REFUND and bot_offer_val:
+                    api_response = await self.paypal_client.make_offer(
+                        dispute_id=dispute_id,
+                        offer_amount=bot_offer_val,
+                        note=msg,
+                        correlation_id=correlation_id,
+                    )
+                    action_taken = f"BOT_OFFERED_PARTIAL_REFUND_${bot_offer_val:.2f}"
+                else:
+                    api_response = await self.paypal_client.send_message(
+                        dispute_id=dispute_id,
+                        message=msg,
+                        correlation_id=correlation_id,
+                    )
+                    action_taken = f"BOT_SENT_{step.value}"
 
             pipeline_status = PipelineExecutionStatus.DE_ESCALATED
 
-        # CLAIM Stage: Defend via Dossier or Concede
+        # CLAIM Stage: Defend via Cryptographic Dossier or Concede
         elif dispute.dispute_stage in (
             DisputeStage.CLAIM,
             DisputeStage.PRE_ARBITRATION,
             DisputeStage.ARBITRATION,
         ):
-            # If unwinnable due to strict policy mandate and tenant allows auto-concede
-            if not compliance_result.is_eligible and tenant.custom_rules.auto_concede_unwinnable:
+            if (
+                not compliance_result.is_eligible
+                and tenant.custom_rules.auto_concede_unwinnable
+                and not decision.seller_rights_met
+            ):
                 api_response = await self.paypal_client.accept_claim(
                     dispute_id=dispute_id,
                     note=f"Merchant conceded due to Seller Protection policy exclusion: {'; '.join(compliance_result.disqualification_reasons)}",
@@ -478,8 +596,8 @@ class DisputePipeline:
                 )
 
             elif decision.recommended_action == ArbitrationAction.PROVIDE_EVIDENCE:
-                # Compile comprehensive PDF dossier with CE 3.0 and compliance schedules
-                pdf_bytes = self.pdf_generator.generate_rebuttal_dossier(
+                # Compile comprehensive PDF dossier + cryptographic SHA-256 hash
+                pdf_bytes, pdf_sha256 = self.pdf_generator.generate_rebuttal_dossier_with_hash(
                     dispute=dispute,
                     decision=decision,
                     carrier=carrier_data,
@@ -487,6 +605,7 @@ class DisputePipeline:
                     order=order_data,
                     compliance_result=compliance_result,
                     ce3_result=ce3_result,
+                    billing_result=billing_data,
                 )
                 pdf_path = f"artifacts/dossiers/dispute_{dispute_id}_evidence.pdf"
 
@@ -527,13 +646,26 @@ class DisputePipeline:
                 )
 
         # 8. Build and Store Record
+        audit_entries = [
+            f"Ingested for merchant '{tenant.merchant_id}' at {datetime.now(UTC).isoformat()}.",
+            f"Specialist Agent: {decision.specialist_agent} | Persona: {decision.persona_mode} | LLM Tier: {decision.llm_tier_used}.",
+            f"Compliance Audit: {'ELIGIBLE' if compliance_result.is_eligible else 'DISQUALIFIED'}.",
+            f"Visa CE 3.0: {'QUALIFIED' if (ce3_result and ce3_result.is_qualified) else 'NOT_APPLICABLE'}.",
+            f"Seller Rights Met: {decision.seller_rights_met} | P(win)={decision.win_probability:.2f}, EV=${decision.expected_value:.2f}.",
+            f"Action executed: {action_taken}.",
+        ]
+        if pdf_sha256:
+            audit_entries.append(f"Evidentiary Dossier SHA-256: {pdf_sha256}")
+        if rma_num:
+            audit_entries.append(f"RMA Return Label Generated: {rma_num}")
+
         record = DisputeRecord(
             dispute_id=dispute_id,
             merchant_id=tenant.merchant_id,
             stage=dispute.dispute_stage,
             reason=dispute.dispute_reason,
             amount=amount,
-            currency="USD",
+            currency=dispute.dispute_amount.currency_code or "USD",
             seller_transaction_id=txn_id,
             order_id=effective_order_id,
             customer_email=customer_email or order_data.customer_email,
@@ -547,21 +679,22 @@ class DisputePipeline:
             hitl_reasons=decision.hitl_reasons,
             rebuttal_statement=decision.rebuttal_statement,
             pdf_dossier_path=pdf_path,
+            pdf_dossier_sha256=pdf_sha256,
             paypal_api_response=api_response,
             compliance_eligible=compliance_result.is_eligible,
             compliance_disqualifications=compliance_result.disqualification_reasons,
             visa_ce3_qualified=ce3_result.is_qualified if ce3_result else False,
             rma_number=rma_num,
+            specialist_agent=decision.specialist_agent,
+            persona_mode=decision.persona_mode,
+            llm_tier_used=decision.llm_tier_used,
+            seller_rights_met=decision.seller_rights_met,
+            reasoning_steps=decision.reasoning_steps,
             telemetry_carrier=carrier_data,
             telemetry_warehouse=wh_data,
             telemetry_order=order_data,
-            audit_trail=[
-                f"Ingested for merchant '{tenant.merchant_id}' at {datetime.now(UTC).isoformat()}.",
-                f"Compliance Audit: {'ELIGIBLE' if compliance_result.is_eligible else 'DISQUALIFIED'}.",
-                f"Visa CE 3.0: {'QUALIFIED' if (ce3_result and ce3_result.is_qualified) else 'NOT_APPLICABLE'}.",
-                f"Arbitrated P(win)={decision.win_probability:.2f}, EV=${decision.expected_value:.2f}.",
-                f"Action executed: {action_taken}.",
-            ],
+            telemetry_billing=billing_data,
+            audit_trail=audit_entries,
         )
 
         async with self.lock:
@@ -611,15 +744,23 @@ class DisputePipeline:
                     executive_summary=f"Human override approved by {override_req.reviewer_id}.",
                     rebuttal_statement=record.rebuttal_statement
                     or "Evidence provided following manual review.",
+                    specialist_agent=record.specialist_agent or "DisputeSupervisor",
+                    persona_mode=record.persona_mode or "ADVERSARIAL_LEGAL_DEFENSE",
+                    llm_tier_used=record.llm_tier_used or "TIER_3_DETERMINISTIC_HEURISTIC",
+                    reasoning_steps=record.reasoning_steps,
+                    seller_rights_met=bool(record.seller_rights_met),
                 )
-                pdf_bytes = self.pdf_generator.generate_rebuttal_dossier(
+                pdf_bytes, override_sha256 = self.pdf_generator.generate_rebuttal_dossier_with_hash(
                     dispute=dispute_res,
                     decision=arb_dec,
                     carrier=record.telemetry_carrier,
                     warehouse=record.telemetry_warehouse,
                     order=record.telemetry_order,
+                    billing_result=record.telemetry_billing,
                 )
                 record.pdf_dossier_path = f"artifacts/dossiers/dispute_{dispute_id}_evidence.pdf"
+                record.pdf_dossier_sha256 = override_sha256
+                record.audit_trail.append(f"Evidentiary Dossier SHA-256: {override_sha256}")
                 api_response = await self.paypal_client.provide_evidence(
                     dispute_id=dispute_id,
                     pdf_bytes=pdf_bytes,

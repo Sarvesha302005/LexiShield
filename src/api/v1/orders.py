@@ -7,6 +7,7 @@ and query customer purchase history for dispute simulations.
 import json
 import sqlite3
 from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 router = APIRouter(prefix="/orders", tags=["Orders & Zapier Telemetry"])
@@ -21,19 +22,22 @@ async def list_orders(
     search: str | None = Query(None, description="Search by customer name, email, or order ID"),
     carrier: str | None = Query(None, description="Filter by carrier name (UPS, FedEx, USPS, DHL)"),
 ) -> list[dict[str, Any]]:
-    conn = sqlite3.connect("lexishield.db", timeout=5.0)
-    c = conn.cursor()
-    query = """
-        SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
-               order_date, total_amount, currency, shipping_address, line_items,
-               carrier_name, tracking_number, delivery_status, delivered_date,
-               signed_by, gps_latitude, gps_longitude, scale_measured_weight_kg,
-               scanned_serials, past_orders_count, past_disputes_count, created_at
-        FROM orders
-        ORDER BY created_at DESC
-    """
-    rows = c.execute(query).fetchall()
-    conn.close()
+    try:
+        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        c = conn.cursor()
+        query = """
+            SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
+                   order_date, total_amount, currency, shipping_address, line_items,
+                   carrier_name, tracking_number, delivery_status, delivered_date,
+                   signed_by, gps_latitude, gps_longitude, scale_measured_weight_kg,
+                   scanned_serials, past_orders_count, past_disputes_count, created_at
+            FROM orders
+            ORDER BY created_at DESC
+        """
+        rows = c.execute(query).fetchall()
+        conn.close()
+    except sqlite3.Error:
+        return []
 
     results = []
     for r in rows:
@@ -73,9 +77,8 @@ async def list_orders(
             if not match:
                 continue
 
-        if carrier:
-            if carrier.lower() not in order["carrier_name"].lower():
-                continue
+        if carrier and carrier.lower() not in order["carrier_name"].lower():
+            continue
 
         results.append(order)
 
@@ -88,18 +91,24 @@ async def list_orders(
     description="Fetch single order details by order_id or transaction_id.",
 )
 async def get_order(order_id: str) -> dict[str, Any]:
-    conn = sqlite3.connect("lexishield.db", timeout=5.0)
-    c = conn.cursor()
-    row = c.execute("""
-        SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
-               order_date, total_amount, currency, shipping_address, line_items,
-               carrier_name, tracking_number, delivery_status, delivered_date,
-               signed_by, gps_latitude, gps_longitude, scale_measured_weight_kg,
-               scanned_serials, past_orders_count, past_disputes_count, created_at
-        FROM orders
-        WHERE order_id = ? OR transaction_id = ? OR tracking_number = ?
-    """, (order_id, order_id, order_id)).fetchone()
-    conn.close()
+    try:
+        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        c = conn.cursor()
+        row = c.execute(
+            """
+            SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
+                   order_date, total_amount, currency, shipping_address, line_items,
+                   carrier_name, tracking_number, delivery_status, delivered_date,
+                   signed_by, gps_latitude, gps_longitude, scale_measured_weight_kg,
+                   scanned_serials, past_orders_count, past_disputes_count, created_at
+            FROM orders
+            WHERE order_id = ? OR transaction_id = ? OR tracking_number = ?
+        """,
+            (order_id, order_id, order_id),
+        ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        row = None
 
     if not row:
         raise HTTPException(
@@ -131,4 +140,3 @@ async def get_order(order_id: str) -> dict[str, Any]:
         "past_disputes_count": row[20],
         "created_at": row[21],
     }
-

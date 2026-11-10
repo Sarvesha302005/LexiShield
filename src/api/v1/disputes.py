@@ -3,10 +3,10 @@ Disputes Management and HITL Review API.
 Provides endpoints to monitor dispute lifecycles, inspect evidence, download PDFs, and perform human overrides.
 """
 
-from datetime import datetime, timezone
 import os
 import sqlite3
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -16,15 +16,15 @@ from src.core.exceptions import DisputeNotFoundError
 from src.models.schemas import (
     BuyerInfo,
     DisputedTransaction,
-    DisputeReason,
     DisputeRecord,
     DisputeStage,
-    DisputeStatus,
     DisputeStatsSummary,
+    DisputeStatus,
     HITLOverrideRequest,
     Money,
     PayPalDisputeResource,
     PayPalWebhookEvent,
+    normalize_dispute_reason,
 )
 from src.workflows.dispute_pipeline import DisputePipeline, get_dispute_pipeline
 
@@ -41,7 +41,6 @@ class SimulateDisputeRequest(BaseModel):
     stage: str = Field("CLAIM", description="Stage: 'INQUIRY' or 'CLAIM'")
     amount: float | None = Field(None, description="Disputed amount, defaults to order total")
     merchant_id: str = Field("default-merchant", description="Tenant merchant ID")
-
 
 
 @router.get(
@@ -126,10 +125,15 @@ async def download_pdf_dossier(
             detail=f"No PDF evidentiary dossier found for dispute '{dispute_id}'.",
         )
 
+    headers: dict[str, str] = {}
+    if record.pdf_dossier_sha256:
+        headers["X-Dossier-SHA256"] = record.pdf_dossier_sha256
+
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",
         filename=f"PayPal_Evidence_{dispute_id}.pdf",
+        headers=headers,
     )
 
 
@@ -174,21 +178,24 @@ async def simulate_dispute(
     executes Seller Protection compliance checks, computes win probability,
     and generates the evidentiary ReportLab PDF rebuttal dossier.
     """
-    # 1. Query SQLite for order details
-    conn = sqlite3.connect("lexishield.db", timeout=5.0)
-    c = conn.cursor()
+    # 1. Query SQLite for order details safely
     row = None
-    if req.order_id:
-        row = c.execute(
-            "SELECT order_id, transaction_id, customer_name, customer_email, total_amount, currency FROM orders WHERE order_id = ? OR transaction_id = ?",
-            (req.order_id, req.order_id),
-        ).fetchone()
-    if not row and (req.customer_name or req.customer_email):
-        row = c.execute(
-            "SELECT order_id, transaction_id, customer_name, customer_email, total_amount, currency FROM orders WHERE customer_name = ? OR customer_email = ?",
-            (req.customer_name or "", req.customer_email or ""),
-        ).fetchone()
-    conn.close()
+    try:
+        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        c = conn.cursor()
+        if req.order_id:
+            row = c.execute(
+                "SELECT order_id, transaction_id, customer_name, customer_email, total_amount, currency FROM orders WHERE order_id = ? OR transaction_id = ?",
+                (req.order_id, req.order_id),
+            ).fetchone()
+        if not row and (req.customer_name or req.customer_email):
+            row = c.execute(
+                "SELECT order_id, transaction_id, customer_name, customer_email, total_amount, currency FROM orders WHERE customer_name = ? OR customer_email = ?",
+                (req.customer_name or "", req.customer_email or ""),
+            ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        row = None
 
     order_id = row[0] if row else (req.order_id or "ORD-ZAP-10294")
     txn_id = row[1] if row else f"TXN-{order_id}"
@@ -197,28 +204,25 @@ async def simulate_dispute(
     amount = req.amount or (float(row[4]) if row else 249.99)
     currency = row[5] if row else "USD"
 
-    # Map reason and stage strings to enum
+    # Map reason and stage strings to canonical enums
     try:
         stage_enum = DisputeStage(req.stage.upper())
     except ValueError:
         stage_enum = DisputeStage.CLAIM if "CLAIM" in req.stage.upper() else DisputeStage.INQUIRY
 
-    try:
-        reason_enum = DisputeReason(req.reason)
-    except ValueError:
-        reason_enum = DisputeReason.MERCHANDISE_OR_SERVICE_NOT_RECEIVED
+    reason_enum = normalize_dispute_reason(req.reason)
 
     sim_id = f"PP-SIM-{uuid.uuid4().hex[:8].upper()}"
     webhook_event = PayPalWebhookEvent(
         id=f"WH-EVT-{uuid.uuid4().hex[:12].upper()}",
         event_version="1.0",
-        create_time=datetime.now(timezone.utc).isoformat(),
+        create_time=datetime.now(UTC).isoformat(),
         resource_type="dispute",
         event_type="CUSTOMER.DISPUTE.CREATED",
         summary=f"Simulated PayPal Dispute for {order_id} ({buyer_name})",
         resource=PayPalDisputeResource(
             dispute_id=sim_id,
-            create_time=datetime.now(timezone.utc).isoformat(),
+            create_time=datetime.now(UTC).isoformat(),
             disputed_transactions=[
                 DisputedTransaction(
                     buyer_transaction_id=txn_id,
@@ -242,4 +246,3 @@ async def simulate_dispute(
         merchant_id=req.merchant_id,
     )
     return record
-
