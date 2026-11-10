@@ -43,13 +43,17 @@ class Settings(BaseSettings):
     PAYPAL_API_BASE_URL: str = "https://api-m.sandbox.paypal.com"
     STRICT_WEBHOOK_VERIFICATION: bool = True
 
-    # Google Gemini LLM Settings
+    # Google Gemini / OpenRouter 3-Tier LLM Orchestration Settings
     GEMINI_API_KEY: str = "mock_gemini_api_key"
-    GEMINI_MODEL: str = "gemini-1.5-pro"
+    GEMINI_MODEL: str = "google/gemini-2.0-flash-thinking-exp:free"
 
-    # OpenRouter LLM Settings
     OPENROUTER_API_KEY: str = "mock_openrouter_api_key"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_PRIMARY_MODEL: str = "google/gemini-2.0-flash-thinking-exp:free"
+    OPENROUTER_FALLBACK_MODEL: str = "meta-llama/llama-3.3-70b-instruct:free"
+    OPENROUTER_TIMEOUT_SECONDS: float = 25.0
+    OPENROUTER_SITE_URL: str = "https://lexishield.io"
+    OPENROUTER_APP_NAME: str = "LexiShield Dispute Defense Engine"
 
     # Financial & Fee Parameters
     STANDARD_DISPUTE_FEE: float = Field(default=15.00, description="Standard dispute fee in USD")
@@ -59,8 +63,16 @@ class Settings(BaseSettings):
     HIGH_DISPUTE_FEE_THRESHOLD_MONTHLY_DISPUTES: int = Field(
         default=100, description="Dispute count threshold triggering high volume dispute fee"
     )
+    HIGH_RISK_TENANT_ANOMALY_THRESHOLD: float = Field(
+        default=0.015,
+        description="Merchant dispute ratio threshold (1.5%) triggering high-risk anomaly HITL gate",
+    )
 
-    # Decision Engine Thresholds
+    # Decision Engine Thresholds & Universal Defense Policy
+    SELLER_RIGHTS_FIRST_ENABLED: bool = Field(
+        default=True,
+        description="Enforces Universal Defense Policy: defend any ticket size when valid seller rights proof exists",
+    )
     DEFEND_P_WIN_THRESHOLD: float = Field(
         default=0.70, description="Minimum P(win) required to automatically defend claims"
     )

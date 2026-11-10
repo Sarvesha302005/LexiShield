@@ -37,3 +37,9 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_PRIMARY_MODEL
+        value: google/gemini-2.0-flash-thinking-exp:free
+      - key: OPENROUTER_FALLBACK_MODEL
+        value: meta-llama/llama-3.3-70b-instruct:free

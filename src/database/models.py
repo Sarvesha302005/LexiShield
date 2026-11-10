@@ -3,17 +3,17 @@ SQLAlchemy 2.0 Declarative Models for LexiShield.
 Defines persistent database schemas for Tenants, Disputes, Orders, Alerts, and Accounting Events.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
-from sqlalchemy.dialects.sqlite import JSON as SQLITE_JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 
 class Base(DeclarativeBase):
     """Base declarative class for all database models."""
+
     pass
 
 
@@ -38,9 +38,7 @@ class TenantModel(Base):
     alert_auto_refund_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relationships
     disputes: Mapped[list["DisputeModel"]] = relationship(
@@ -63,20 +61,33 @@ class DisputeModel(Base):
     currency: Mapped[str] = mapped_column(String(10), default="USD")
 
     # Transaction Linkage
-    seller_transaction_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    seller_transaction_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )
     order_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     customer_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Pipeline Status & Decisions
     pipeline_status: Mapped[str] = mapped_column(String(50), default="ANALYZING", index=True)
+    recommended_action: Mapped[str | None] = mapped_column(String(100), nullable=True)
     action_taken: Mapped[str | None] = mapped_column(String(200), nullable=True)
     hitl_flagged: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     hitl_reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
+    hitl_reviewed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    hitl_override_action: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Evidence & Audit
     rebuttal_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_dossier_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    pdf_dossier_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     paypal_api_response: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    # Agentic Reasoning Metadata
+    specialist_agent: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    persona_mode: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    llm_tier_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    seller_rights_met: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    reasoning_steps: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # Guardrails & Liability Shifts
     compliance_eligible: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -88,6 +99,7 @@ class DisputeModel(Base):
     telemetry_carrier: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     telemetry_warehouse: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     telemetry_order: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    telemetry_billing: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     audit_trail: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # Financial Metrics
@@ -96,12 +108,12 @@ class DisputeModel(Base):
     dispute_fee_applied: Mapped[float] = mapped_column(Float, default=15.00)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+        DateTime, default=lambda: datetime.now(UTC), index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationship to Tenant
@@ -139,9 +151,7 @@ class CustomerOrderModel(Base):
     past_orders_count: Mapped[int] = mapped_column(default=0)
     past_disputes_count: Mapped[int] = mapped_column(default=0)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
 class PreDisputeAlertModel(Base):
@@ -157,9 +167,7 @@ class PreDisputeAlertModel(Base):
     fee_saved: Mapped[float] = mapped_column(Float, nullable=False)
     deflection_status: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[str] = mapped_column(Text, nullable=False)
-    processed_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
-    )
+    processed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
 class AccountingEventModel(Base):
@@ -173,7 +181,4 @@ class AccountingEventModel(Base):
     order_id: Mapped[str] = mapped_column(String(100), nullable=False)
     entry_type: Mapped[str] = mapped_column(String(100), nullable=False)
     entries: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
-    )
-
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

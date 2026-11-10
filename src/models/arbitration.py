@@ -1,6 +1,7 @@
 """
 Pydantic Schemas for AI Arbitration, Win Probability, and Decision Reasoning.
-These structured models are populated by Google Gemini 1.5 via Instructor.
+Populated by the Horizontal Specialist Agentic Hierarchy (Gemini 2.0 Flash Thinking,
+Llama 3.3 70B fallback, and deterministic heuristics) via LangChain.
 """
 
 from enum import StrEnum
@@ -81,4 +82,28 @@ class ArbitrationDecision(BaseModel):
     reasoning_steps: list[str] = Field(
         default_factory=list,
         description="Step-by-step chain-of-thought analysis leading to the arbitration outcome",
+    )
+    specialist_agent: str = Field(
+        default="DisputeSupervisor",
+        description="Domain specialist agent that evaluated the case (INRAgent, SNADAgent, FraudAgent, BillingAgent)",
+    )
+    persona_mode: str = Field(
+        default="ADVERSARIAL_LEGAL_DEFENSE",
+        description="Stage-aware persona applied (CUSTOMER_DIPLOMAT or ADVERSARIAL_LEGAL_DEFENSE)",
+    )
+    llm_tier_used: str = Field(
+        default="TIER_3_DETERMINISTIC_HEURISTIC",
+        description="Orchestration tier that produced the reasoning (TIER_1_GEMINI_THINKING, TIER_2_LLAMA_70B, TIER_3_DETERMINISTIC_HEURISTIC)",
+    )
+    thought_trace: str | None = Field(
+        default=None,
+        description="Extracted native <thought> reasoning trace from primary thinking model",
+    )
+    seller_rights_met: bool = Field(
+        default=False,
+        description="True if PayPal Seller Protection (§11), Visa CE 3.0, or statutory contract rights are satisfied",
+    )
+    statutory_citations: list[str] = Field(
+        default_factory=list,
+        description="Specific policy clauses invoked (§11, Visa CE 3.0, RMA Terms, SaaS Clickwrap)",
     )

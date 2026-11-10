@@ -3,8 +3,10 @@ Database Session Management & Async Engine Configuration.
 Provides connection pooling, session lifecycle, and automatic table initialization.
 """
 
-from collections.abc import AsyncGenerator
 import logging
+from collections.abc import AsyncGenerator
+
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -52,10 +54,32 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+_DISPUTES_COLUMN_MIGRATIONS: dict[str, str] = {
+    "recommended_action": "VARCHAR(100)",
+    "hitl_reviewed_by": "VARCHAR(100)",
+    "hitl_override_action": "VARCHAR(100)",
+    "pdf_dossier_sha256": "VARCHAR(64)",
+    "specialist_agent": "VARCHAR(100)",
+    "persona_mode": "VARCHAR(100)",
+    "llm_tier_used": "VARCHAR(100)",
+    "seller_rights_met": "BOOLEAN",
+    "reasoning_steps": "JSON",
+    "telemetry_billing": "JSON",
+}
+
+
 async def init_db() -> None:
-    """Creates database schema if not already initialized."""
+    """Creates database schema if not already initialized and applies safe additive migrations."""
     logger.info("Verifying and initializing database schema...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if "sqlite" in settings.DATABASE_URL:
+            res = await conn.execute(text("PRAGMA table_info(disputes)"))
+            existing_cols = {row[1] for row in res.fetchall()}
+            for col_name, col_type in _DISPUTES_COLUMN_MIGRATIONS.items():
+                if col_name not in existing_cols:
+                    await conn.execute(
+                        text(f"ALTER TABLE disputes ADD COLUMN {col_name} {col_type}")
+                    )
+                    logger.info(f"Migrated disputes table: added column '{col_name}'.")
     logger.info("Database schema initialized successfully.")
-
