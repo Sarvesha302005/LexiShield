@@ -1639,6 +1639,16 @@ code, pre, .font-mono {
 .dash-msg { max-width: 85%; padding: 0.75rem 1rem; border-radius: 1rem; font-size: 0.875rem; line-height: 1.55; }
 .dash-msg-ours { background: #0284c7; color: #ffffff; border-top-right-radius: 0.25rem; }
 .dash-msg-theirs { background: #f1f5f9; color: #0f172a; border-top-left-radius: 0.25rem; }
+.dash-ai-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 9999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 600;
+}
 .dash-input {
   min-width: 0;
   padding: 0.5625rem 0.875rem;

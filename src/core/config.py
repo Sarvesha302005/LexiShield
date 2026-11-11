@@ -34,6 +34,10 @@ class Settings(BaseSettings):
         default="sqlite+aiosqlite:///./lexishield.db",
         description="Async database connection URL (SQLite for local dev, PostgreSQL for production)",
     )
+    SQLITE_DB_PATH: str = Field(
+        default="lexishield.db",
+        description="File path for direct SQLite operations",
+    )
 
     # PayPal API Settings
     PAYPAL_MODE: Literal["sandbox", "live"] = "sandbox"
@@ -54,6 +58,27 @@ class Settings(BaseSettings):
     OPENROUTER_TIMEOUT_SECONDS: float = 25.0
     OPENROUTER_SITE_URL: str = "https://lexishield.io"
     OPENROUTER_APP_NAME: str = "LexiShield Dispute Defense Engine"
+    # Used as a third, cross-provider backup when NVIDIA NIM is the primary provider.
+    OPENROUTER_BACKUP_MODEL: str = "nvidia/nemotron-3.5-super-vl:free"
+
+    # NVIDIA NIM (build.nvidia.com). When a real key is set, NIM serves Tier 1 and Tier 2
+    # and OpenRouter becomes the backup; without one, OpenRouter serves Tier 1 and Tier 2.
+    NVIDIA_API_KEY: str = "mock_nvidia_api_key"
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    # Dispute analysis (formal rebuttal, win probability): quality first.
+    NVIDIA_PRIMARY_MODEL: str = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    NVIDIA_FALLBACK_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    # Buyer conversation (merchant replies, simulated buyer): speed first. Bolt answered in about
+    # 1.5 s in benchmarks against 20+ s for the larger models; replies stay short and factual.
+    NVIDIA_CHAT_PRIMARY_MODEL: str = "nvidia/nemotron-3.5-bolt-e4b"
+    NVIDIA_CHAT_FALLBACK_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    NVIDIA_CHAT_TIMEOUT_SECONDS: float = 45.0
+    # New-dispute analysis prompts are long; Super VL needed more than 40 s for them on NIM.
+    NVIDIA_TIMEOUT_SECONDS: float = 90.0
+
+    # Tries per model when it returns an empty answer. Free NIM/OpenRouter models occasionally do
+    # (Nemotron 3 Ultra answered about 3 in 8 requests), and a quick retry usually succeeds.
+    LLM_EMPTY_RESPONSE_ATTEMPTS: int = 3
 
     # Financial & Fee Parameters
     STANDARD_DISPUTE_FEE: float = Field(default=15.00, description="Standard dispute fee in USD")
@@ -94,3 +119,13 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Retrieve cached application settings instance."""
     return Settings()
+
+
+def get_sqlite_db_path() -> str:
+    """Return active SQLite database file path, honoring LEXISHIELD_DB_PATH override if set."""
+    import os
+
+    env_path = os.environ.get("LEXISHIELD_DB_PATH")
+    if env_path:
+        return env_path
+    return get_settings().SQLITE_DB_PATH

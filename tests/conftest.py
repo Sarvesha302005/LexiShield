@@ -4,7 +4,16 @@ Pytest configuration, shared fixtures, mock generators, and sample dispute paylo
 
 import base64
 import datetime
+import os
 from collections.abc import AsyncGenerator
+
+# Keep tests offline even when real keys are in .env: environment variables take precedence over
+# .env, so every Settings() built during the run (including in tests) sees placeholder keys.
+os.environ["OPENROUTER_API_KEY"] = "mock_openrouter_api_key"
+os.environ["NVIDIA_API_KEY"] = "mock_nvidia_api_key"
+os.environ["LEXISHIELD_DB_PATH"] = "test_lexishield.db"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_lexishield.db"
+import shutil
 from typing import Any
 
 import httpx
@@ -21,6 +30,21 @@ from src.core.security import _CERT_CACHE, build_signature_payload
 from src.main import app
 
 
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """Ensure tests execute inside an isolated test_lexishield.db so lexishield.db is never polluted."""
+    test_db = "test_lexishield.db"
+    prod_db = "lexishield.db"
+    if os.path.exists(prod_db):
+        shutil.copyfile(prod_db, test_db)
+    yield
+    if os.path.exists(test_db):
+        try:
+            os.remove(test_db)
+        except Exception:
+            pass
+
+
 @pytest.fixture(autouse=True)
 def override_settings():
     """Ensure test settings are active and clean cache."""
@@ -29,8 +53,11 @@ def override_settings():
     settings.ENVIRONMENT = "test"
     settings.STRICT_WEBHOOK_VERIFICATION = True
     settings.PAYPAL_WEBHOOK_ID = "TEST_WEBHOOK_ID_001"
-    # Keep tests offline even when a real key is in .env (otherwise every test calls OpenRouter).
+    # Keep tests offline even when real keys are in .env (otherwise tests call the providers).
     settings.OPENROUTER_API_KEY = "mock_openrouter_api_key"
+    settings.NVIDIA_API_KEY = "mock_nvidia_api_key"
+    settings.SQLITE_DB_PATH = "test_lexishield.db"
+    settings.DATABASE_URL = "sqlite+aiosqlite:///./test_lexishield.db"
     return settings
 
 

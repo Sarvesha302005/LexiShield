@@ -215,3 +215,136 @@ async def test_specialist_respects_compliance_cap_even_when_llm_optimistic():
     assert evaluation.llm_tier_used == OrchestrationTier.TIER_1_GEMINI_THINKING
     assert evaluation.seller_rights_met is False
     assert evaluation.win_probability == 0.05
+
+
+@pytest.mark.asyncio
+async def test_empty_response_is_retried_on_the_same_tier():
+    """Free providers sometimes return empty content; one retry keeps the request on Tier 1."""
+    good = _make_ai_msg(
+        json.dumps({"customer_message": "Your parcel was delivered.", "reasoning_steps": []})
+    )
+    primary = MagicMock()
+    primary.ainvoke = AsyncMock(side_effect=[_make_ai_msg(""), good])
+    fallback = MagicMock()
+    fallback.ainvoke = AsyncMock()
+
+    settings = Settings(OPENROUTER_API_KEY="sk-or-live-test-key", ENVIRONMENT="test")
+    orchestrator = MultiModelLLMOrchestrator(
+        settings=settings, primary_llm=primary, fallback_llm=fallback
+    )
+
+    res = await orchestrator.invoke_with_fallback("system", "user")
+
+    assert res.tier_used == OrchestrationTier.TIER_1_GEMINI_THINKING
+    assert res.payload is not None and res.payload.customer_message == "Your parcel was delivered."
+    assert primary.ainvoke.await_count == 2
+    fallback.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_repeated_empty_responses_fall_back_to_tier2():
+    """If the primary stays empty after its retry, the fallback model answers."""
+    primary = MagicMock()
+    primary.ainvoke = AsyncMock(return_value=_make_ai_msg(""))
+    fallback = MagicMock()
+    fallback.ainvoke = AsyncMock(
+        return_value=_make_ai_msg(
+            json.dumps({"customer_message": "Fallback reply.", "reasoning_steps": []})
+        )
+    )
+
+    settings = Settings(OPENROUTER_API_KEY="sk-or-live-test-key", ENVIRONMENT="test")
+    orchestrator = MultiModelLLMOrchestrator(
+        settings=settings, primary_llm=primary, fallback_llm=fallback
+    )
+
+    res = await orchestrator.invoke_with_fallback("system", "user")
+
+    assert res.tier_used == OrchestrationTier.TIER_2_LLAMA_70B
+    assert res.payload is not None and res.payload.customer_message == "Fallback reply."
+    assert primary.ainvoke.await_count == settings.LLM_EMPTY_RESPONSE_ATTEMPTS
+
+
+def test_routes_use_nvidia_first_with_openrouter_backup():
+    """With both keys, NIM serves Tier 1/2 and OpenRouter is the cross-provider backup."""
+    settings = Settings(
+        NVIDIA_API_KEY="nvapi-live-test-key",
+        OPENROUTER_API_KEY="sk-or-live-test-key",
+        ENVIRONMENT="test",
+    )
+    routes = MultiModelLLMOrchestrator(settings=settings).model_routes()
+
+    assert [(r.tier, r.provider) for r in routes] == [
+        (OrchestrationTier.TIER_1_GEMINI_THINKING, "nvidia"),
+        (OrchestrationTier.TIER_2_LLAMA_70B, "nvidia"),
+        (OrchestrationTier.OPENROUTER_BACKUP, "openrouter"),
+    ]
+    assert routes[0].model_name == settings.NVIDIA_PRIMARY_MODEL
+    assert routes[2].model_name == settings.OPENROUTER_BACKUP_MODEL
+
+
+def test_routes_without_keys_for_a_provider():
+    """NIM alone has no backup; OpenRouter alone serves both tiers as before."""
+    nim_only = Settings(NVIDIA_API_KEY="nvapi-live-test-key", ENVIRONMENT="test")
+    assert [r.provider for r in MultiModelLLMOrchestrator(settings=nim_only).model_routes()] == [
+        "nvidia",
+        "nvidia",
+    ]
+
+    openrouter_only = Settings(OPENROUTER_API_KEY="sk-or-live-test-key", ENVIRONMENT="test")
+    routes = MultiModelLLMOrchestrator(settings=openrouter_only).model_routes()
+    assert [r.provider for r in routes] == ["openrouter", "openrouter"]
+    assert routes[0].model_name == openrouter_only.OPENROUTER_PRIMARY_MODEL
+
+
+@pytest.mark.asyncio
+async def test_openrouter_backup_answers_when_both_nvidia_models_fail():
+    """A NIM outage or rate limit on both models is covered by the OpenRouter backup."""
+    primary = MagicMock()
+    primary.ainvoke = AsyncMock(side_effect=RuntimeError("NIM 429 Too Many Requests"))
+    fallback = MagicMock()
+    fallback.ainvoke = AsyncMock(side_effect=RuntimeError("NIM 503"))
+    backup = MagicMock()
+    backup.ainvoke = AsyncMock(
+        return_value=_make_ai_msg(
+            json.dumps({"customer_message": "Backup reply.", "reasoning_steps": []})
+        )
+    )
+
+    settings = Settings(
+        NVIDIA_API_KEY="nvapi-live-test-key",
+        OPENROUTER_API_KEY="sk-or-live-test-key",
+        ENVIRONMENT="test",
+    )
+    orchestrator = MultiModelLLMOrchestrator(
+        settings=settings, primary_llm=primary, fallback_llm=fallback
+    )
+    orchestrator._clients[("openrouter", settings.OPENROUTER_BACKUP_MODEL)] = backup
+
+    res = await orchestrator.invoke_with_fallback("system", "user")
+
+    assert res.tier_used == OrchestrationTier.OPENROUTER_BACKUP
+    assert res.model_name == settings.OPENROUTER_BACKUP_MODEL
+    assert res.payload is not None and res.payload.customer_message == "Backup reply."
+    assert [r.split(" (")[0] for r in res.fallback_reasons] == ["Tier 1", "Tier 2"]
+
+
+def test_chat_purpose_uses_fast_chat_models():
+    """Buyer conversation uses the speed-first NIM chain; analysis keeps the quality-first chain."""
+    settings = Settings(
+        NVIDIA_API_KEY="nvapi-live-test-key",
+        OPENROUTER_API_KEY="sk-or-live-test-key",
+        ENVIRONMENT="test",
+    )
+    chat = MultiModelLLMOrchestrator(settings=settings, purpose="chat").model_routes()
+    analysis = MultiModelLLMOrchestrator(settings=settings).model_routes()
+
+    assert [r.model_name for r in chat] == [
+        settings.NVIDIA_CHAT_PRIMARY_MODEL,
+        settings.NVIDIA_CHAT_FALLBACK_MODEL,
+        settings.OPENROUTER_BACKUP_MODEL,
+    ]
+    assert [r.model_name for r in analysis][:2] == [
+        settings.NVIDIA_PRIMARY_MODEL,
+        settings.NVIDIA_FALLBACK_MODEL,
+    ]

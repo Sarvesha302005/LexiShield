@@ -49,6 +49,7 @@ export function mapApiDispute(item, fallbacks = {}) {
     llm_tier_used: item.llm_tier_used || null,
     reasoning_steps: item.reasoning_steps || [],
     rma_number: item.rma_number || null,
+    messages: item.messages || [],
   };
 }
 
@@ -113,6 +114,15 @@ export const formatMoney = (amount, currency = 'USD') =>
 export const formatDate = (iso) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
+// FastAPI errors carry `detail` as a string, or as a list of {loc, msg} objects for validation errors.
+function errorMessage(detail, status) {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map((d) => [d.loc?.slice(1).join('.'), d.msg].filter(Boolean).join(': ')).join('; ');
+  }
+  return `Request failed (${status})`;
+}
+
 // Review decisions offered in the "Needs your attention" panel, mapped to the backend's override actions.
 export const REVIEW_ACTIONS = {
   DEFEND: { label: 'Approve evidence', status: 'DEFENDED' },
@@ -140,7 +150,7 @@ export async function submitReviewDecision(dispute, action, reviewerId) {
   });
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
-    throw new Error(detail?.detail || `Request failed (${res.status})`);
+    throw new Error(errorMessage(detail?.detail, res.status));
   }
   const record = await res.json();
   const updated = mapApiDispute(record, dispute);
@@ -150,4 +160,55 @@ export async function submitReviewDecision(dispute, action, reviewerId) {
     action_taken: updated.action_taken,
     pdf_dossier_sha256: updated.pdf_dossier_sha256 || dispute.pdf_dossier_sha256,
   };
+}
+
+// Turns a live dispute's stored messages into the chat thread shape the Conversations tab renders.
+export function toChatMessages(dispute, merchantName) {
+  return (dispute.messages || []).map((m) => {
+    const fromBuyer = m.sender === 'BUYER';
+    return {
+      sender: fromBuyer ? 'buyer' : 'bot',
+      name: fromBuyer ? dispute.buyer_name : m.sender === 'ARBITER' ? 'PayPal' : merchantName,
+      time: new Date(m.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+      text: m.content,
+      isAiReply: m.source === 'AI_REPLY',
+      isAiBuyer: m.source === 'SIMULATED_AI',
+    };
+  });
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(errorMessage(detail?.detail, res.status));
+  }
+  return res.json();
+}
+
+const disputeUrl = (id) => `/api/v1/disputes/${encodeURIComponent(id)}`;
+
+// Sends a merchant message to the buyer through PayPal; returns the dispute's updated message list.
+export async function sendDisputeMessage(disputeId, text) {
+  const record = await postJson(`${disputeUrl(disputeId)}/messages`, { message: text });
+  return record.messages || [];
+}
+
+// Demo helper: the backend writes the buyer's next message (issue template first, then AI replies
+// to the merchant) and runs it through the webhook path, which also sends the merchant's AI reply.
+export async function simulateBuyerMessage(disputeId) {
+  const record = await postJson(`${disputeUrl(disputeId)}/simulate-buyer-message`, {});
+  return record.messages || [];
+}
+
+// Re-reads one dispute so new buyer replies (arriving by webhook) show up.
+export async function fetchDisputeMessages(disputeId) {
+  const res = await fetch(disputeUrl(disputeId));
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  const record = await res.json();
+  return { messages: record.messages || [], pipeline_status: record.pipeline_status };
 }

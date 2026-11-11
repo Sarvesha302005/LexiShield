@@ -94,6 +94,14 @@ class DisputedTransaction(BaseModel):
     buyer: BuyerInfo | None = None
 
 
+class PayPalDisputeMessage(BaseModel):
+    """A message in the PayPal dispute thread (resource.messages[])."""
+
+    posted_by: str  # "BUYER", "SELLER" or "ARBITER"
+    time_posted: str | None = None
+    content: str | None = None
+
+
 class PayPalDisputeResource(BaseModel):
     """PayPal Dispute Resource payload."""
 
@@ -107,6 +115,19 @@ class PayPalDisputeResource(BaseModel):
     status: DisputeStatus = DisputeStatus.WAITING_FOR_SELLER_RESPONSE
     dispute_life_cycle_stage: str | None = None
     seller_response_due_date: str | None = None
+    messages: list[PayPalDisputeMessage] = Field(default_factory=list)
+
+
+class DisputeMessage(BaseModel):
+    """A message stored on a dispute record (buyer replies and seller responses)."""
+
+    sender: str  # "BUYER", "SELLER" or "ARBITER"
+    content: str
+    timestamp: str
+    # "PAYPAL" (webhook), "AI_REPLY", "TEMPLATE_REPLY", "DASHBOARD", or for demo buyer messages
+    # "SIMULATED_TEMPLATE", "SIMULATED_AI" and "SIMULATED_MANUAL"
+    source: str = "PAYPAL"
+    llm_tier_used: str | None = None
 
 
 class PayPalWebhookEvent(BaseModel):
@@ -298,6 +319,7 @@ class DisputeRecord(BaseModel):
     telemetry_order: OrderCustomerInfo | None = None
     telemetry_billing: BillingTelemetryInfo | None = None
     audit_trail: list[str] = Field(default_factory=list)
+    messages: list[DisputeMessage] = Field(default_factory=list)
 
 
 class HITLOverrideRequest(BaseModel):

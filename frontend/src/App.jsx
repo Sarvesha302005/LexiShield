@@ -4,7 +4,7 @@ import HomePage from './components/HomePage';
 import AuthPage from './components/AuthPage';
 import DashboardPage from './components/DashboardPage';
 import DashboardHeader from './components/DashboardHeader';
-import { mapApiDispute } from './utils/disputes';
+import { mapApiDispute, sendDisputeMessage, simulateBuyerMessage } from './utils/disputes';
 import { 
   INITIAL_DISPUTES, 
   INITIAL_CHAT_CONVERSATIONS, 
@@ -43,12 +43,7 @@ export default function App() {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             const mapped = data.map((item) => mapApiDispute(item));
-            setDisputes(prev => {
-              // Combine unique by dispute_id
-              const existingIds = new Set(prev.map(d => d.dispute_id));
-              const newItems = mapped.filter(d => !existingIds.has(d.dispute_id));
-              return [...newItems, ...prev];
-            });
+            setDisputes(mapped);
           }
         }
       } catch (err) {
@@ -115,25 +110,38 @@ export default function App() {
     setDisputes(prev => prev.map(d => (d.dispute_id === disputeId ? { ...d, ...changes } : d)));
   };
 
-  const handleSendMessage = (disputeId, messageObj) => {
+  // Live disputes send through PayPal via the backend; demo disputes only keep a local thread.
+  const handleSendMessage = async (disputeId, messageObj) => {
+    const disp = disputes.find(d => d.dispute_id === disputeId);
+    if (disp?.is_live) {
+      const messages = await sendDisputeMessage(disputeId, messageObj.text);
+      handleUpdateDispute(disputeId, { messages });
+      return;
+    }
     setChatConversations(prev => ({
       ...prev,
       [disputeId]: [...(prev[disputeId] || []), messageObj]
     }));
   };
 
-  const handleSimulateBuyerReply = (disputeId) => {
+  const handleSimulateBuyerReply = async (disputeId) => {
     const disp = disputes.find(d => d.dispute_id === disputeId);
     const buyerName = disp ? disp.buyer_name : "Buyer";
-    
-    setTimeout(() => {
-      const sampleReplies = [
-        "I just asked my spouse, and turns out they ordered this yesterday without telling me! How do I cancel the dispute on PayPal?",
-        "Okay, I found the package behind the planter on the porch. The courier hid it well. Thank you for providing the carrier delivery photo!",
-        "I still want to return this. Can you send the pre-paid RMA shipping label so I can drop it off at UPS tomorrow?"
-      ];
-      const randomReply = sampleReplies[Math.floor(Math.random() * sampleReplies.length)];
+    const sampleReplies = [
+      "I just asked my spouse, and turns out they ordered this yesterday without telling me! How do I cancel the dispute on PayPal?",
+      "Okay, I found the package behind the planter on the porch. The courier hid it well. Thank you for providing the carrier delivery photo!",
+      "I still want to return this. Can you send the pre-paid RMA shipping label so I can drop it off at UPS tomorrow?"
+    ];
+    const randomReply = sampleReplies[Math.floor(Math.random() * sampleReplies.length)];
 
+    // Live disputes: the backend writes the buyer's message and the merchant's AI reply.
+    if (disp?.is_live) {
+      const messages = await simulateBuyerMessage(disputeId);
+      handleUpdateDispute(disputeId, { messages });
+      return;
+    }
+
+    setTimeout(() => {
       handleSendMessage(disputeId, {
         sender: 'buyer',
         name: buyerName,

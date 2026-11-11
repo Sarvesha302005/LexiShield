@@ -65,6 +65,7 @@ _DISPUTES_COLUMN_MIGRATIONS: dict[str, str] = {
     "seller_rights_met": "BOOLEAN",
     "reasoning_steps": "JSON",
     "telemetry_billing": "JSON",
+    "messages": "JSON",
 }
 
 

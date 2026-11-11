@@ -245,6 +245,7 @@ async def test_sqlite_db_persistence_and_sync_roundtrip(tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     db_file = tmp_path / "lexishield.db"
+    monkeypatch.setenv("LEXISHIELD_DB_PATH", str(db_file))
     test_engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}")
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

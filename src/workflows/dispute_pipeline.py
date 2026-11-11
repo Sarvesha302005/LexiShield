@@ -5,6 +5,7 @@ Enterprise-grade lifecycle management with multi-tenant isolation, conversationa
 
 import asyncio
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from src.core.config import get_settings
@@ -14,12 +15,15 @@ from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
     BillingTelemetryInfo,
     CarrierTrackingInfo,
+    DisputeMessage,
     DisputeReason,
     DisputeRecord,
     DisputeStage,
     DisputeStatsSummary,
     HITLOverrideRequest,
+    Money,
     OrderCustomerInfo,
+    PayPalDisputeMessage,
     PayPalDisputeResource,
     PayPalWebhookEvent,
     PipelineExecutionStatus,
@@ -28,10 +32,12 @@ from src.models.schemas import (
 )
 from src.services.accounting import AccountingIntegrationService
 from src.services.billing import BillingTelemetryService
+from src.services.buyer_simulator import first_buyer_message, next_buyer_message
 from src.services.carrier import CarrierService
 from src.services.compliance import ComplianceAuditResult, SellerProtectionComplianceEngine
 from src.services.conversation_bot import ConversationalSettlementBot, NegotiationStep
 from src.services.llm_arbitrator import LLMArbitrator
+from src.services.llm_orchestrator import MultiModelLLMOrchestrator, OrchestrationTier
 from src.services.order import OrderDBService
 from src.services.paypal_client import PayPalClient
 from src.services.pdf_generator import PDFGenerator
@@ -60,6 +66,7 @@ class DisputePipeline:
         accounting_service: AccountingIntegrationService | None = None,
         rma_manager: RMAManager | None = None,
         tenant_manager: TenantManager | None = None,
+        llm_orchestrator: MultiModelLLMOrchestrator | None = None,
     ) -> None:
         self.settings = get_settings()
         self.carrier_service = carrier_service or CarrierService()
@@ -75,6 +82,8 @@ class DisputePipeline:
         self.accounting_service = accounting_service or AccountingIntegrationService()
         self.rma_manager = rma_manager or RMAManager()
         self.tenant_manager = tenant_manager or get_tenant_manager()
+        # Used only for buyer conversation (merchant replies, simulated buyer), so the fast chat chain.
+        self.llm_orchestrator = llm_orchestrator or MultiModelLLMOrchestrator(purpose="chat")
 
         # Thread-safe in-memory dispute registry: dispute_id -> DisputeRecord
         self._dispute_store: dict[str, DisputeRecord] = {}
@@ -92,7 +101,9 @@ class DisputePipeline:
             import json
             import sqlite3
 
-            conn = sqlite3.connect("lexishield.db", timeout=5.0)
+            from src.core.config import get_sqlite_db_path
+
+            conn = sqlite3.connect(get_sqlite_db_path(), timeout=5.0)
             c = conn.cursor()
             rows = c.execute("""
                 SELECT dispute_id, merchant_id, stage, reason, amount, currency,
@@ -104,11 +115,12 @@ class DisputePipeline:
                        audit_trail, created_at, updated_at, recommended_action,
                        hitl_reviewed_by, hitl_override_action, pdf_dossier_sha256,
                        specialist_agent, persona_mode, llm_tier_used, seller_rights_met,
-                       reasoning_steps, telemetry_order, telemetry_billing
+                       reasoning_steps, telemetry_order, telemetry_billing, messages
                 FROM disputes
             """).fetchall()
             conn.close()
 
+            self._dispute_store.clear()
             for r in rows:
                 c_data = json.loads(r[23]) if r[23] else None
                 w_data = json.loads(r[24]) if r[24] else None
@@ -186,6 +198,7 @@ class DisputePipeline:
                     telemetry_order=OrderCustomerInfo(**o_data) if o_data else None,
                     telemetry_billing=BillingTelemetryInfo(**b_data) if b_data else None,
                     audit_trail=json.loads(r[25]) if r[25] else [],
+                    messages=[DisputeMessage(**m) for m in json.loads(r[39])] if r[39] else [],
                 )
             if rows:
                 logger.info(f"Synchronized {len(rows)} disputes from database.")
@@ -198,7 +211,9 @@ class DisputePipeline:
             import json
             import sqlite3
 
-            conn = sqlite3.connect("lexishield.db", timeout=5.0)
+            from src.core.config import get_sqlite_db_path
+
+            conn = sqlite3.connect(get_sqlite_db_path(), timeout=5.0)
             c = conn.cursor()
             c.execute(
                 """
@@ -212,8 +227,9 @@ class DisputePipeline:
                     reasoning_steps, compliance_eligible, compliance_disqualifications,
                     visa_ce3_qualified, rma_number, telemetry_carrier,
                     telemetry_warehouse, telemetry_order, telemetry_billing, audit_trail,
-                    win_probability, expected_value, dispute_fee_applied, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    win_probability, expected_value, dispute_fee_applied, created_at, updated_at,
+                    messages
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     record.dispute_id,
@@ -281,6 +297,7 @@ class DisputePipeline:
                         if hasattr(record.updated_at, "isoformat")
                         else str(record.updated_at)
                     ),
+                    json.dumps([m.model_dump() for m in record.messages]),
                 ),
             )
             conn.commit()
@@ -346,6 +363,13 @@ class DisputePipeline:
                     existing.updated_at = datetime.now(UTC)
                     return existing
 
+        # Buyer replies and other changes to a dispute we already hold. Without this branch the
+        # idempotency check below would drop the update as "already processed".
+        if event.event_type == "CUSTOMER.DISPUTE.UPDATED":
+            existing = self._dispute_store.get(dispute_id)
+            if existing:
+                return await self.handle_dispute_update(existing, dispute, corr_id)
+
         # Idempotency check
         async with self.lock:
             existing = self._dispute_store.get(dispute_id)
@@ -365,6 +389,280 @@ class DisputePipeline:
             correlation_id=corr_id,
             merchant_id=effective_merchant,
         )
+
+    async def handle_dispute_update(
+        self,
+        record: DisputeRecord,
+        dispute: PayPalDisputeResource,
+        correlation_id: str,
+    ) -> DisputeRecord:
+        """
+        Handles CUSTOMER.DISPUTE.UPDATED for a dispute already in the registry.
+
+        PayPal resends the whole message thread on every update, so only messages not already
+        stored are added. When the buyer has written something new, an AI-drafted reply is sent
+        back through PayPal, unless the dispute is awaiting human review or already closed.
+        """
+        now = datetime.now(UTC).isoformat()
+
+        async with self.lock:
+            # Buyer messages keep PayPal's timestamp; our own replies come back from PayPal with a
+            # different timestamp, so seller/arbiter messages are matched on content alone.
+            def message_key(sender: str, timestamp: str, content: str) -> tuple[str, ...]:
+                return (sender, timestamp, content) if sender == "BUYER" else (sender, content)
+
+            known = {message_key(m.sender, m.timestamp, m.content) for m in record.messages}
+            new_messages: list[DisputeMessage] = []
+            for msg in dispute.messages:
+                content = (msg.content or "").strip()
+                if not content:
+                    continue
+                entry = DisputeMessage(
+                    sender=msg.posted_by.upper(),
+                    content=content,
+                    timestamp=msg.time_posted or now,
+                )
+                key = message_key(entry.sender, entry.timestamp, entry.content)
+                if key not in known:
+                    known.add(key)
+                    new_messages.append(entry)
+            record.messages.extend(new_messages)
+            new_buyer_messages = [m for m in new_messages if m.sender == "BUYER"]
+
+            if dispute.dispute_stage != record.stage:
+                record.audit_trail.append(
+                    f"PayPal moved the dispute from {record.stage.value} to {dispute.dispute_stage.value} at {now}."
+                )
+                record.stage = dispute.dispute_stage
+            record.audit_trail.append(
+                f"Dispute update received at {now}: {len(new_buyer_messages)} new buyer message(s)."
+            )
+            record.updated_at = datetime.now(UTC)
+            status = record.pipeline_status
+
+        if not new_buyer_messages:
+            await self._save_record_to_db(record)
+            return record
+
+        if status == PipelineExecutionStatus.FLAGGED_HITL:
+            skip_reason = "the dispute is awaiting human review"
+        elif status in (PipelineExecutionStatus.RESOLVED, PipelineExecutionStatus.CONCEDED):
+            skip_reason = "the dispute is already closed"
+        else:
+            skip_reason = None
+
+        if skip_reason:
+            async with self.lock:
+                record.audit_trail.append(f"No automatic reply sent because {skip_reason}.")
+            await self._save_record_to_db(record)
+            return record
+
+        reply_text, tier_used = await self._draft_buyer_reply(
+            record, new_buyer_messages[-1].content
+        )
+        try:
+            api_response = await self.paypal_client.send_message(
+                dispute_id=record.dispute_id,
+                message=reply_text,
+                correlation_id=correlation_id,
+            )
+        except Exception as exc:
+            logger.error(f"[{correlation_id}] Failed to send reply for {record.dispute_id}: {exc}")
+            async with self.lock:
+                record.audit_trail.append(f"Reply to buyer could not be sent: {exc}")
+            await self._save_record_to_db(record)
+            return record
+
+        is_ai = tier_used != OrchestrationTier.TIER_3_DETERMINISTIC_HEURISTIC.value
+        async with self.lock:
+            record.messages.append(
+                DisputeMessage(
+                    sender="SELLER",
+                    content=reply_text,
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="AI_REPLY" if is_ai else "TEMPLATE_REPLY",
+                    llm_tier_used=tier_used,
+                )
+            )
+            record.paypal_api_response = api_response
+            record.audit_trail.append(
+                f"Replied to the buyer via PayPal send-message ({'AI' if is_ai else 'template'}: {tier_used})."
+            )
+            record.updated_at = datetime.now(UTC)
+        await self._save_record_to_db(record)
+        return record
+
+    @staticmethod
+    def _opening_messages(
+        outreach_message: str | None, decision: ArbitrationDecision
+    ) -> list[DisputeMessage]:
+        """The merchant's first message to the buyer, so the stored thread starts where PayPal's does."""
+        if not outreach_message:
+            return []
+        written_by_ai = (
+            outreach_message == decision.customer_message
+            and decision.llm_tier_used != OrchestrationTier.TIER_3_DETERMINISTIC_HEURISTIC.value
+        )
+        return [
+            DisputeMessage(
+                sender="SELLER",
+                content=outreach_message,
+                timestamp=datetime.now(UTC).isoformat(),
+                source="AI_REPLY" if written_by_ai else "TEMPLATE_REPLY",
+                llm_tier_used=decision.llm_tier_used,
+            )
+        ]
+
+    async def simulate_buyer_turn(
+        self, dispute_id: str, message: str | None = None
+    ) -> DisputeRecord:
+        """
+        Demo: the buyer sends one message, then the merchant's AI reply follows.
+
+        Without `message`, the buyer's first message is a template for the dispute reason and later
+        ones are written by the LLM playing the buyer. The message is delivered as a
+        CUSTOMER.DISPUTE.UPDATED event, exactly as a real PayPal webhook would deliver it.
+        """
+        record = self._dispute_store.get(dispute_id)
+        if not record:
+            raise DisputeNotFoundError(f"Dispute '{dispute_id}' not found in registry.")
+
+        tier_used: str | None = None
+        if message:
+            source = "SIMULATED_MANUAL"
+        elif not any(m.sender == "BUYER" for m in record.messages):
+            message, source = first_buyer_message(record), "SIMULATED_TEMPLATE"
+        else:
+            message, tier_used = await next_buyer_message(record, self.llm_orchestrator)
+            is_ai = tier_used != OrchestrationTier.TIER_3_DETERMINISTIC_HEURISTIC.value
+            source = "SIMULATED_AI" if is_ai else "SIMULATED_TEMPLATE"
+
+        now = datetime.now(UTC).isoformat()
+        # PayPal sends the whole thread on each update, so include what we already hold.
+        thread = [
+            PayPalDisputeMessage(posted_by=m.sender, time_posted=m.timestamp, content=m.content)
+            for m in record.messages
+        ]
+        thread.append(PayPalDisputeMessage(posted_by="BUYER", time_posted=now, content=message))
+        event = PayPalWebhookEvent(
+            id=f"WH-EVT-{uuid.uuid4().hex[:12].upper()}",
+            event_version="1.0",
+            create_time=now,
+            resource_type="dispute",
+            event_type="CUSTOMER.DISPUTE.UPDATED",
+            summary=f"Simulated buyer message on {dispute_id}",
+            resource=PayPalDisputeResource(
+                dispute_id=dispute_id,
+                create_time=record.created_at.isoformat(),
+                update_time=now,
+                dispute_amount=Money(currency_code=record.currency, value=f"{record.amount:.2f}"),
+                dispute_stage=record.stage,
+                dispute_reason=record.reason,
+                messages=thread,
+            ),
+        )
+        record = await self.process_webhook_event(
+            event=event,
+            correlation_id=f"CORR-SIM-MSG-{uuid.uuid4().hex[:8].upper()}",
+            merchant_id=record.merchant_id,
+        )
+
+        # Label the simulated buyer message so the dashboard can show how it was written.
+        async with self.lock:
+            for stored in reversed(record.messages):
+                if stored.sender == "BUYER" and stored.content == message:
+                    stored.source = source
+                    stored.llm_tier_used = tier_used
+                    break
+        await self._save_record_to_db(record)
+        return record
+
+    async def send_seller_message(
+        self, dispute_id: str, message: str, correlation_id: str | None = None
+    ) -> DisputeRecord:
+        """Sends a merchant-written message to the buyer via PayPal and stores it on the record."""
+        record = self._dispute_store.get(dispute_id)
+        if not record:
+            raise DisputeNotFoundError(f"Dispute '{dispute_id}' not found in registry.")
+        api_response = await self.paypal_client.send_message(
+            dispute_id=dispute_id,
+            message=message,
+            correlation_id=correlation_id,
+        )
+        async with self.lock:
+            record.messages.append(
+                DisputeMessage(
+                    sender="SELLER",
+                    content=message,
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="DASHBOARD",
+                )
+            )
+            record.paypal_api_response = api_response
+            record.audit_trail.append("Merchant sent a message to the buyer from the dashboard.")
+            record.updated_at = datetime.now(UTC)
+        await self._save_record_to_db(record)
+        return record
+
+    async def _draft_buyer_reply(
+        self, record: DisputeRecord, buyer_message: str
+    ) -> tuple[str, str]:
+        """Drafts a reply to the buyer with the LLM orchestrator; falls back to a safe template."""
+        carrier = record.telemetry_carrier
+        order = record.telemetry_order
+        greeting = f"Hello {order.customer_name}," if order and order.customer_name else "Hello,"
+
+        facts = [
+            f"Dispute reason: {record.reason.value}",
+            f"Stage: {record.stage.value}",
+            f"Amount: {record.amount:.2f} {record.currency}",
+        ]
+        if order:
+            facts.append(f"Order: {order.order_id}, buyer: {order.customer_name}")
+        if carrier:
+            delivery = f"Carrier: {carrier.carrier_name}, tracking {carrier.tracking_number}, status {carrier.status}"
+            if carrier.delivered_date:
+                delivery += f", delivered {carrier.delivered_date}"
+            if carrier.signed_by:
+                delivery += f", signed by {carrier.signed_by}"
+            facts.append(delivery)
+        history = "\n".join(f"{m.sender}: {m.content}" for m in record.messages[-8:])
+
+        system_prompt = (
+            "You write replies from an online merchant to a buyer inside a PayPal dispute. "
+            "Be courteous, concise (under 120 words) and factual. Use only the facts provided. "
+            "Never offer refunds, discounts, money or replacements, never admit fault, and never "
+            "make promises about the dispute outcome. Answer the buyer's latest message, point to "
+            "the relevant evidence, and ask a clarifying question when it helps. "
+            "Move the conversation forward: do not repeat sentences from your earlier messages, and "
+            "once the evidence has been shared, respond to what the buyer says instead of restating it. "
+            "You are the merchant: when the buyer asks for something the merchant does (such as "
+            "contacting the carrier), say what you will do next rather than asking the buyer about it. "
+            "Write dates in plain English (for example 'October 24, 2026'), never as raw timestamps. "
+            "Reply with JSON only."
+        )
+        user_prompt = (
+            "Facts:\n- "
+            + "\n- ".join(facts)
+            + f"\n\nConversation so far:\n{history}"
+            + f"\n\nLatest buyer message:\n{buyer_message}"
+            + '\n\nReturn exactly: {"customer_message": "<reply to the buyer>", "reasoning_steps": ["<short step>"]}'
+        )
+
+        result = await self.llm_orchestrator.invoke_with_fallback(system_prompt, user_prompt)
+        for reason in result.fallback_reasons:
+            logger.warning(f"Buyer reply for {record.dispute_id}: {reason}")
+        text = (result.payload.customer_message or "").strip() if result.payload else ""
+        if text:
+            return text, result.tier_used.value
+
+        template = (
+            f"{greeting} thank you for your message. We've received it and are reviewing your case"
+        )
+        if carrier:
+            template += f", including the {carrier.carrier_name} tracking record for {carrier.tracking_number}"
+        template += ". We'll follow up with you here shortly."
+        return template, OrchestrationTier.TIER_3_DETERMINISTIC_HEURISTIC.value
 
     async def execute_dispute_resolution(
         self,
@@ -491,6 +789,7 @@ class DisputePipeline:
         pipeline_status = PipelineExecutionStatus.ANALYZING
         action_taken = None
         api_response = None
+        outreach_message: str | None = None  # opening message sent to the buyer (INQUIRY stage)
         pdf_path = None
         pdf_sha256: str | None = None
         rma_num = None
@@ -544,6 +843,7 @@ class DisputePipeline:
                     correlation_id=correlation_id,
                 )
                 action_taken = f"BOT_OFFERED_PARTIAL_REFUND_${offer_val:.2f}"
+                outreach_message = msg
             else:
                 step, msg, bot_offer_val = self.conversation_bot.advance_negotiation(
                     dispute=dispute,
@@ -559,6 +859,7 @@ class DisputePipeline:
                         correlation_id=correlation_id,
                     )
                     action_taken = f"BOT_OFFERED_PARTIAL_REFUND_${bot_offer_val:.2f}"
+                    outreach_message = msg
                 else:
                     api_response = await self.paypal_client.send_message(
                         dispute_id=dispute_id,
@@ -566,6 +867,7 @@ class DisputePipeline:
                         correlation_id=correlation_id,
                     )
                     action_taken = f"BOT_SENT_{step.value}"
+                    outreach_message = msg
 
             pipeline_status = PipelineExecutionStatus.DE_ESCALATED
 
@@ -695,6 +997,7 @@ class DisputePipeline:
             telemetry_order=order_data,
             telemetry_billing=billing_data,
             audit_trail=audit_entries,
+            messages=self._opening_messages(outreach_message, decision),
         )
 
         async with self.lock:

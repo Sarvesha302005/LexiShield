@@ -48,7 +48,9 @@ class BillingTelemetryService:
 
         # Check SQLite lexishield.db for seeded SaaS orders (e.g., ORD-ZAP-55210)
         try:
-            conn = sqlite3.connect("lexishield.db", timeout=3.0)
+            from src.core.config import get_sqlite_db_path
+
+            conn = sqlite3.connect(get_sqlite_db_path(), timeout=3.0)
             c = conn.cursor()
             row = c.execute(
                 """

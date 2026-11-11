@@ -1,185 +1,218 @@
 /**
  * Rich seed disputes, telemetry, and buyer conversation mock data
  * used for instant interactive demonstrations, sandbox simulations, and fallback.
+ * Strictly mirrors the 6 canonical persistent demo disputes in lexishield.db.
  */
 
 export const INITIAL_DISPUTES = [
   {
-    dispute_id: "PP-D-849201",
-    buyer_email: "michael.b92@gmail.com",
-    buyer_name: "Michael Barnes",
-    amount: 349.99,
-    currency: "USD",
-    reason: "UNAUTHORIZED_TRANSACTION",
-    stage: "CLAIM",
-    pipeline_status: "DEFENDED",
-    win_probability: 0.94,
-    created_at: "2026-10-18T14:22:00Z",
-    evidence_score: 96,
-    fee_saved: 15.0,
-    tracking_number: "1Z9999999999999999",
-    carrier: "UPS Express",
-    device_ip: "74.125.21.18",
-    device_hash: "a9f84bc910e3d",
-    buyer_sentiment: "Frustrated / Evasive",
-    order_id: "SHP-99214",
-    item_title: "Sony WH-1000XM5 Wireless Headphones",
-    ai_summary: "Confirmed delivery to buyer billing address with GPS match (0.002 mi delta) and photo signature. Device fingerprint matched past 4 legitimate logins.",
-    action_taken: "DEFEND_AUTONOMOUS"
-  },
-  {
-    dispute_id: "PP-D-849202",
-    buyer_email: "sarah.t_sf@yahoo.com",
-    buyer_name: "Sarah Jenkins",
-    amount: 189.50,
-    currency: "USD",
-    reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
-    stage: "INQUIRY",
-    pipeline_status: "AUTO_NEGOTIATING",
-    win_probability: 0.88,
-    created_at: "2026-10-19T09:15:00Z",
-    evidence_score: 89,
-    fee_saved: 0.0,
-    tracking_number: "940011189956291039",
-    carrier: "USPS Priority",
-    device_ip: "198.51.100.42",
-    device_hash: "c318fe009941a",
-    buyer_sentiment: "Confused",
-    order_id: "SHP-99219",
-    item_title: "Ergonomic Mechanical Keyboard (Pro RGB)",
-    ai_summary: "Package scanned as 'Delivered to Front Porch' 12 hours ago. AI settlement bot offered parcel locker re-check and $20 goodwill store coupon.",
-    action_taken: "BOT_CONVERSATION"
-  },
-  {
-    dispute_id: "PP-D-849203",
-    buyer_email: "alex.chen.dev@gmail.com",
-    buyer_name: "Alex Chen",
-    amount: 620.00,
+    dispute_id: "PP-D-99412",
+    buyer_email: "elena.rostova@example.com",
+    buyer_name: "Elena Rostova",
+    amount: 349.00,
     currency: "USD",
     reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
     stage: "CLAIM",
-    pipeline_status: "FLAGGED_HITL",
-    win_probability: 0.65,
-    created_at: "2026-10-17T18:40:00Z",
-    evidence_score: 72,
-    fee_saved: 0.0,
-    tracking_number: "782991048192",
-    carrier: "FedEx Standard",
-    device_ip: "172.56.42.109",
-    device_hash: "e441bcda81021",
-    buyer_sentiment: "High Risk / Dispute Escalated",
-    order_id: "SHP-99180",
-    item_title: "Ultra-wide 4K Gaming Monitor (34-inch)",
-    ai_summary: "High value order ($620). Buyer claims screen flicker; merchant policy specifies 30-day RMA return. Flagged for operational Human sign-off.",
-    action_taken: "FLAG_HITL_OPERATIONS"
-  },
-  {
-    dispute_id: "PP-D-849204",
-    buyer_email: "elena.rodriguez@outlook.com",
-    buyer_name: "Elena Rodriguez",
-    amount: 79.99,
-    currency: "USD",
-    reason: "UNAUTHORIZED_TRANSACTION",
-    stage: "RESOLVED",
-    pipeline_status: "RESOLVED_WON",
-    win_probability: 0.98,
-    created_at: "2026-10-16T11:05:00Z",
-    evidence_score: 99,
+    pipeline_status: "DEFENDED",
+    win_probability: 0.92,
+    created_at: "2026-10-15T14:30:00Z",
+    evidence_score: 92,
     fee_saved: 15.0,
-    tracking_number: "1Z8888888888888888",
+    tracking_number: "UPS-1Z99999903",
     carrier: "UPS Ground",
-    device_ip: "66.249.79.1",
-    device_hash: "f1092a830112c",
-    buyer_sentiment: "Resolved",
-    order_id: "SHP-99122",
-    item_title: "USB-C Dual 4K Laptop Docking Station",
-    ai_summary: "Dispute closed in merchant favor by PayPal. 100% evidence acceptance on IP geolocation, session cookie history, and signed delivery manifest.",
-    action_taken: "WON_AUTOMATICALLY"
+    device_ip: "198.51.100.82",
+    device_hash: "a9f84bc910e3d",
+    buyer_sentiment: "Defect Alleged / Under Review",
+    order_id: "ORD-ZAP-99412",
+    item_title: "Shure SM7B Vocal Dynamic Studio Microphone",
+    ai_summary: "Outbound calibrated scale weight matched catalog tare weight (0.0% variance). Hardware serial SN-SHURE-SM7B-4412 logged and verified. Pre-paid RMA label required before refund.",
+    specialist_agent: "SNADAgent",
+    action_taken: "PROVIDE_EVIDENCE"
   },
   {
-    dispute_id: "PP-D-849205",
-    buyer_email: "david.miller@gmail.com",
-    buyer_name: "David Miller",
-    amount: 45.00,
+    dispute_id: "PP-D-77194",
+    buyer_email: "samantha.cole@outlook.com",
+    buyer_name: "Samantha Cole",
+    amount: 299.99,
     currency: "USD",
-    reason: "DUPLICATE_TRANSACTION",
+    reason: "UNAUTHORISED",
+    stage: "CLAIM",
+    pipeline_status: "DEFENDED",
+    win_probability: 0.98,
+    created_at: "2026-10-10T16:00:00Z",
+    evidence_score: 98,
+    fee_saved: 15.0,
+    tracking_number: "FDX-771940022",
+    carrier: "FedEx Home Delivery",
+    device_ip: "198.51.100.42",
+    device_hash: "c318fe009941a",
+    buyer_sentiment: "First-Party Misuse / Friendly Fraud",
+    order_id: "ORD-ZAP-77194",
+    item_title: "Sony WH-1000XM5 Wireless Headphones",
+    ai_summary: "Visa Compelling Evidence 3.0 (CE 3.0) liability shift qualified: 2 prior undisputed orders (>120d old) matching IP, device fingerprint, and confirmed shipping address.",
+    specialist_agent: "FraudAgent",
+    action_taken: "PROVIDE_EVIDENCE"
+  },
+  {
+    dispute_id: "PP-D-55210",
+    buyer_email: "sophia.chen@enterprise.io",
+    buyer_name: "Sophia Chen",
+    amount: 79.00,
+    currency: "USD",
+    reason: "CANCELED_RECURRING_BILLING",
+    stage: "INQUIRY",
+    pipeline_status: "DE_ESCALATED",
+    win_probability: 0.95,
+    created_at: "2026-10-01T09:00:00Z",
+    evidence_score: 95,
+    fee_saved: 15.0,
+    tracking_number: "DIGITAL-LIC-55210",
+    carrier: "Digital Fulfillment",
+    device_ip: "24.130.88.12",
+    device_hash: "e441bcda81021",
+    buyer_sentiment: "De-escalated / Subscription Active",
+    order_id: "ORD-ZAP-55210",
+    item_title: "LexiShield Security Suite (1-Seat Pro Annual)",
+    ai_summary: "Customer assented to recurring Terms of Service at checkout. Active server sessions and telemetry recorded post-renewal. Concierge offered billing pause or tier adjustments.",
+    specialist_agent: "BillingAgent",
+    action_taken: "SEND_MESSAGE"
+  },
+  {
+    dispute_id: "PP-D-44102",
+    buyer_email: "liam.smith@example.com",
+    buyer_name: "Liam Smith",
+    amount: 35.00,
+    currency: "USD",
+    reason: "CREDIT_NOT_PROCESSED",
     stage: "CLAIM",
     pipeline_status: "CONCEDED",
-    win_probability: 0.12,
-    created_at: "2026-10-15T16:50:00Z",
-    evidence_score: 25,
+    win_probability: 0.15,
+    created_at: "2026-10-12T11:20:00Z",
+    evidence_score: 15,
     fee_saved: 0.0,
-    tracking_number: "9400100000000000",
-    carrier: "USPS First Class",
+    tracking_number: "USPS-9400100044102",
+    carrier: "USPS Ground Advantage",
     device_ip: "108.162.245.8",
     device_hash: "b7721a6011a78",
-    buyer_sentiment: "Justified Claim",
-    order_id: "SHP-99094",
-    item_title: "Braided Nylon Cable Pack (5-Pack)",
-    ai_summary: "Accidental double-click during checkout resulted in duplicate charge. Engine autonomously conceded and refunded to preserve merchant dispute ratio.",
-    action_taken: "AUTO_CONCEDED_REFUNDED"
+    buyer_sentiment: "Billing Adjustment Accepted",
+    order_id: "ORD-ZAP-44102",
+    item_title: "High-Speed USB-C to Lightning Braided Cable",
+    ai_summary: "Billing credit discrepancy verified from customer support ticket logs. Autonomous concession executed early to avoid non-refundable dispute penalty fee.",
+    specialist_agent: "BillingAgent",
+    action_taken: "ACCEPT_CLAIM"
+  },
+  {
+    dispute_id: "PP-D-66305",
+    buyer_email: "jordan.lee@techcorp.io",
+    buyer_name: "Jordan Lee",
+    amount: 849.00,
+    currency: "USD",
+    reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    stage: "CLAIM",
+    pipeline_status: "FLAGGED_HITL",
+    win_probability: 0.88,
+    created_at: "2026-10-18T09:45:00Z",
+    evidence_score: 88,
+    fee_saved: 0.0,
+    tracking_number: "FDX-998822011",
+    carrier: "FedEx Priority",
+    device_ip: "66.249.79.1",
+    device_hash: "f1092a830112c",
+    buyer_sentiment: "Awaiting Human Sign-off",
+    order_id: "ORD-ZAP-66305",
+    item_title: "ASUS ROG Swift 34\" Ultrawide Gaming Monitor",
+    ai_summary: "High order value ($849.00 > $300.00 threshold). Delivery confirmed with recipient signature 'J. LEE' under PayPal §11. Held for Human-in-the-Loop review before dispatch.",
+    specialist_agent: "INRAgent",
+    hitl_reasons: ["High order value ($849.00 > $300.00).", "Mandatory signature verification met."],
+    action_taken: "FLAG_FOR_HITL"
+  },
+  {
+    dispute_id: "PP-D-88201",
+    buyer_email: "marcus.vance@gmail.com",
+    buyer_name: "Marcus Vance",
+    amount: 249.99,
+    currency: "USD",
+    reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    stage: "INQUIRY",
+    pipeline_status: "DE_ESCALATED",
+    win_probability: 0.94,
+    created_at: "2026-10-20T11:20:00Z",
+    evidence_score: 94,
+    fee_saved: 15.0,
+    tracking_number: "1Z9999999999999999",
+    carrier: "UPS Next Day Air",
+    device_ip: "74.125.21.18",
+    device_hash: "d8819ab0012e8",
+    buyer_sentiment: "Delivery Verified / Informational",
+    order_id: "ORD-ZAP-10294",
+    item_title: "Bose QuietComfort 45 Noise Cancelling Headphones",
+    ai_summary: "Carrier verified delivery at confirmed address with courier drop-off GPS (34.0983, -118.3267) and signed recipient proof 'M. VANCE'. Concierge provided delivery assistance.",
+    specialist_agent: "INRAgent",
+    action_taken: "SEND_MESSAGE"
   }
 ];
 
 export const INITIAL_CHAT_CONVERSATIONS = {
-  "PP-D-849201": [
+  "PP-D-88201": [
     {
       sender: "buyer",
-      name: "Michael Barnes",
-      time: "Yesterday, 2:22 PM",
-      text: "I did not make this purchase of $349.99 on my PayPal account! Someone must have hacked into my account. I want an immediate full refund."
-    },
-    {
-      sender: "bot",
-      name: "LexiShield AI Assistant",
-      time: "Yesterday, 2:23 PM",
-      text: "Hello Michael, thank you for reaching out. We take security very seriously. We verified that this order was placed using your primary residential IP (74.125.21.18) and delivered to your verified PayPal address on file with signed UPS confirmation. Could another member of your household have ordered this?"
-    },
-    {
-      sender: "buyer",
-      name: "Michael Barnes",
-      time: "Yesterday, 3:10 PM",
-      text: "Wait... let me check with my son. He mentioned needing new headphones for college."
-    },
-    {
-      sender: "bot",
-      name: "LexiShield AI Assistant",
-      time: "Yesterday, 3:11 PM",
-      text: "Thank you for checking! If the order was made by someone in your household, please consider closing the PayPal dispute to avoid unnecessary account holds. If you still need to return the unopened package, our 30-day pre-paid return label is ready for you."
-    }
-  ],
-  "PP-D-849202": [
-    {
-      sender: "buyer",
-      name: "Sarah Jenkins",
-      time: "Today, 9:15 AM",
+      name: "Marcus Vance",
+      time: "Yesterday, 11:20 AM",
       text: "Tracking shows delivered yesterday, but I looked on my porch and there was no package anywhere. Please reship or refund!"
     },
     {
       sender: "bot",
       name: "LexiShield AI Assistant",
-      time: "Today, 9:16 AM",
-      text: "Hi Sarah! We reviewed the USPS carrier telemetry for tracking 940011189956291039. The scan timestamp was at 4:32 PM yesterday at mailbox/parcel locker #14. Have you had a chance to check the secure apartment parcel locker?"
+      time: "Yesterday, 11:21 AM",
+      text: "Hi Marcus! We reviewed the UPS Next Day Air tracking 1Z9999999999999999. The package was delivered with signature 'M. VANCE' and GPS coordinates confirmed at your address. Could you check around your side porch or with neighbors?"
     },
     {
       sender: "buyer",
-      name: "Sarah Jenkins",
-      time: "Today, 9:45 AM",
-      text: "Oh! I didn't see the USPS parcel locker notification slip in my mailbox. I'll go check downstairs right now."
+      name: "Marcus Vance",
+      time: "Yesterday, 11:45 AM",
+      text: "Oh! My neighbor picked it up to keep it out of the rain. I have the box now. Thank you for the quick verification!"
     }
   ],
-  "PP-D-849203": [
+  "PP-D-99412": [
     {
       sender: "buyer",
-      name: "Alex Chen",
-      time: "Oct 17, 6:40 PM",
-      text: "The 34-inch monitor has slight flickering when using HDMI at 144Hz. This is not what I expected for a $620 screen."
+      name: "Elena Rostova",
+      time: "Oct 15, 2:30 PM",
+      text: "The microphone arrived but I think an accessory is missing or it's defective."
     },
     {
       sender: "bot",
       name: "LexiShield AI Assistant",
-      time: "Oct 17, 6:42 PM",
-      text: "Hello Alex, we apologize for the display experience. High refresh 4K rates often require DisplayPort 1.4 or certified HDMI 2.1 cables. We can dispatch a complimentary certified braided DisplayPort cable immediately, or provide an RMA return label for a brand-new replacement."
+      time: "Oct 15, 2:32 PM",
+      text: "Hello Elena, our automated packing station recorded an exact catalog tare weight match (0.0% delta) with unbroken tamper seal SEAL-ZAP-8821. If you would like to return it for a replacement, we have issued a pre-paid RMA return shipping label."
+    }
+  ],
+  "PP-D-77194": [
+    {
+      sender: "buyer",
+      name: "Samantha Cole",
+      time: "Oct 10, 4:00 PM",
+      text: "I do not recognize this charge of $299.99 on my card!"
+    },
+    {
+      sender: "bot",
+      name: "LexiShield AI Assistant",
+      time: "Oct 10, 4:02 PM",
+      text: "Hello Samantha, this order was placed from your verified home IP address and delivered to your confirmed billing address where 2 previous undisputed orders were shipped. Could a household member have made the purchase?"
+    }
+  ],
+  "PP-D-55210": [
+    {
+      sender: "buyer",
+      name: "Sophia Chen",
+      time: "Oct 01, 9:00 AM",
+      text: "I was charged $79.00 for annual renewal but I wanted to review my plan first."
+    },
+    {
+      sender: "bot",
+      name: "LexiShield AI Assistant",
+      time: "Oct 01, 9:02 AM",
+      text: "Hello Sophia! We can certainly help you review your subscription tier or apply a credit toward your renewal."
     }
   ]
 };

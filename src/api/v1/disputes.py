@@ -162,6 +162,60 @@ async def override_hitl_decision(
         ) from exc
 
 
+class DisputeMessageRequest(BaseModel):
+    """A message to post into a dispute thread."""
+
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post(
+    "/{dispute_id}/messages",
+    response_model=DisputeRecord,
+    summary="Send Message to Buyer",
+    description="Sends a merchant-written message to the buyer through PayPal and stores it on the dispute.",
+)
+async def send_message_to_buyer(
+    dispute_id: str,
+    req: DisputeMessageRequest,
+    pipeline: DisputePipeline = Depends(get_dispute_pipeline),
+) -> DisputeRecord:
+    try:
+        return await pipeline.send_seller_message(
+            dispute_id=dispute_id, message=req.message.strip()
+        )
+    except DisputeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+class SimulateBuyerMessageRequest(BaseModel):
+    """Optional fixed buyer text; when omitted the buyer message is generated."""
+
+    message: str | None = Field(None, min_length=1, max_length=2000)
+
+
+@router.post(
+    "/{dispute_id}/simulate-buyer-message",
+    response_model=DisputeRecord,
+    summary="Simulate Buyer Reply",
+    description=(
+        "Demo helper for buyer and merchant communication. Without a `message`, the buyer's first message "
+        "is a template for the dispute reason and later ones are written by the AI playing the buyer. "
+        "The message runs through the same path a real PayPal CUSTOMER.DISPUTE.UPDATED webhook takes, "
+        "so the merchant's AI reply follows automatically."
+    ),
+)
+async def simulate_buyer_message(
+    dispute_id: str,
+    req: SimulateBuyerMessageRequest | None = None,
+    pipeline: DisputePipeline = Depends(get_dispute_pipeline),
+) -> DisputeRecord:
+    text = req.message.strip() if req and req.message else None
+    try:
+        return await pipeline.simulate_buyer_turn(dispute_id=dispute_id, message=text)
+    except DisputeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.post(
     "/simulate",
     response_model=DisputeRecord,

@@ -101,6 +101,7 @@ class DisputeModel(Base):
     telemetry_order: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     telemetry_billing: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     audit_trail: Mapped[list[str]] = mapped_column(JSON, default=list)
+    messages: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
 
     # Financial Metrics
     win_probability: Mapped[float | None] = mapped_column(Float, nullable=True)

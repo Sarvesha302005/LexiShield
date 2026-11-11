@@ -44,7 +44,9 @@ class TenantManager:
         try:
             import sqlite3
 
-            conn = sqlite3.connect("lexishield.db", timeout=5.0)
+            from src.core.config import get_sqlite_db_path
+
+            conn = sqlite3.connect(get_sqlite_db_path(), timeout=5.0)
             c = conn.cursor()
             rows = c.execute("""
                 SELECT merchant_id, name, paypal_client_id, paypal_client_secret, paypal_webhook_id,

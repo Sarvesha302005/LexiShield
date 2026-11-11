@@ -32,6 +32,8 @@ import {
   REVIEW_ACTIONS,
   submitReviewDecision,
   reviewReasonLabel,
+  toChatMessages,
+  fetchDisputeMessages,
 } from '../utils/disputes';
 
 const FILTERS = [
@@ -292,18 +294,67 @@ export default function DashboardPage({
   };
 
   const activeChatDispute = disputes.find((d) => d.dispute_id === activeChatDisputeId) || disputes[0];
-  const currentChatMessages = (activeChatDispute && chatConversations[activeChatDispute.dispute_id]) || [];
+  const isLiveChat = Boolean(activeChatDispute?.is_live);
+  const currentChatMessages = !activeChatDispute
+    ? []
+    : isLiveChat
+      ? toChatMessages(activeChatDispute, merchantProfile.business_name)
+      : chatConversations[activeChatDispute.dispute_id] || [];
 
-  const handleSendChatMessage = (e) => {
+  // While a live conversation is open, re-read it so buyer replies arriving by webhook appear.
+  const activeChatId = activeChatDispute?.dispute_id;
+  useEffect(() => {
+    if (activeTab !== 'chat' || !isLiveChat || !activeChatId) return undefined;
+    let cancelled = false;
+    const refresh = () =>
+      fetchDisputeMessages(activeChatId)
+        .then((changes) => !cancelled && onUpdateDispute(activeChatId, changes))
+        .catch(() => {}); // backend briefly unavailable: keep showing what we have
+    refresh();
+    const id = setInterval(refresh, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [activeTab, isLiveChat, activeChatId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [chatError, setChatError] = useState(null);
+
+  const handleSendChatMessage = async (e) => {
     e?.preventDefault();
     if (!chatInput.trim() || !activeChatDispute) return;
-    onSendMessage(activeChatDispute.dispute_id, {
-      sender: 'bot',
-      name: merchantProfile.business_name,
-      time: 'Just now',
-      text: chatInput.trim(),
-    });
-    setChatInput('');
+    setIsSendingChat(true);
+    setChatError(null);
+    try {
+      await onSendMessage(activeChatDispute.dispute_id, {
+        sender: 'bot',
+        name: merchantProfile.business_name,
+        time: 'Just now',
+        text: chatInput.trim(),
+      });
+      setChatInput('');
+    } catch (err) {
+      setChatError(`Message not sent: ${err.message}`);
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
+
+  const [isSimulatingReply, setIsSimulatingReply] = useState(false);
+
+  // One demo turn: the buyer writes (template first, then AI), then the merchant's AI replies.
+  const handleSimulateReply = async () => {
+    if (!activeChatDispute) return;
+    setIsSimulatingReply(true);
+    setChatError(null);
+    try {
+      await onSimulateBuyerReply(activeChatDispute.dispute_id);
+    } catch (err) {
+      setChatError(`Couldn’t simulate a reply: ${err.message}`);
+    } finally {
+      setIsSimulatingReply(false);
+    }
   };
 
   const handleAiAutoReply = () => {
@@ -337,8 +388,8 @@ export default function DashboardPage({
         </div>
         <DemoToolsMenu
           onSimulateDispute={() => setIsSimulateModalOpen(true)}
-          onSimulateReply={() => activeChatDispute && onSimulateBuyerReply(activeChatDispute.dispute_id)}
-          canSimulateReply={activeTab === 'chat' && Boolean(activeChatDispute)}
+          onSimulateReply={handleSimulateReply}
+          canSimulateReply={activeTab === 'chat' && Boolean(activeChatDispute) && !isSimulatingReply}
         />
       </div>
 
@@ -588,13 +639,27 @@ export default function DashboardPage({
                   const isOurs = msg.sender === 'bot';
                   return (
                     <div key={idx} className={`flex flex-col ${isOurs ? 'items-end' : 'items-start'}`}>
-                      <div className="text-xs text-slate-500 mb-1">
+                      <div className="text-xs text-slate-500 mb-1 flex items-center gap-1.5">
                         <span className="font-semibold text-slate-700">{msg.name}</span> · {msg.time}
+                        {(msg.isAiReply || msg.isAiBuyer) && (
+                          <span className="dash-ai-tag">
+                            <Sparkles className="w-3 h-3" />
+                            {msg.isAiBuyer ? 'AI buyer (demo)' : 'AI reply'}
+                          </span>
+                        )}
                       </div>
                       <div className={`dash-msg ${isOurs ? 'dash-msg-ours' : 'dash-msg-theirs'}`}>{msg.text}</div>
                     </div>
                   );
                 })
+              )}
+              {isSimulatingReply && (
+                <div className="flex flex-col items-start" role="status">
+                  <div className="text-xs text-slate-500 mb-1">{activeChatDispute?.buyer_name} is typing…</div>
+                  <div className="hiw-typing is-in" aria-hidden="true">
+                    <span /><span /><span />
+                  </div>
+                </div>
               )}
             </div>
 
@@ -612,11 +677,12 @@ export default function DashboardPage({
                   aria-label="Message to buyer"
                   className="dash-input flex-1"
                 />
-                <button type="submit" disabled={!chatInput.trim()} className="dash-btn dash-btn-primary">
-                  <Send className="w-4 h-4" />
+                <button type="submit" disabled={!chatInput.trim() || isSendingChat} className="dash-btn dash-btn-primary">
+                  {isSendingChat ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   <span>Send</span>
                 </button>
               </form>
+              {chatError && <p className="text-sm text-rose-600">{chatError}</p>}
             </div>
           </div>
 
