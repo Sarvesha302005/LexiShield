@@ -2,8 +2,8 @@
 Multi-Model LLM Orchestration and Zero-Downtime 3-Tier Fallback Engine.
 
 Built on LangChain (`langchain-openai` + `langchain-core`) targeting OpenRouter:
-- Tier 1 (Primary): `google/gemini-2.0-flash-thinking-exp:free` (with native `<thought>` trace extraction)
-- Tier 2 (Fallback): `meta-llama/llama-3.3-70b-instruct:free` (rate limit / timeout / API error fallback)
+- Tier 1 (Primary): `nvidia/nemotron-3-ultra-550b-a55b:free` (Nemotron 3 Ultra; reasoning traces extracted when returned)
+- Tier 2 (Fallback): `nvidia/nemotron-3.5-super-vl:free` (Nemotron 3.5 Super VL; rate limit / timeout / API error fallback)
 - Tier 3 (Offline / Deterministic Heuristics): Local deterministic fallback when API keys are missing/mock or network fails.
 """
 
@@ -23,7 +23,8 @@ from src.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
-_THOUGHT_PATTERN = re.compile(r"<thought>(.*?)</thought>", re.IGNORECASE | re.DOTALL)
+# Gemini-style <thought> and the <think> tags used by Nemotron and other reasoning models.
+_THOUGHT_PATTERN = re.compile(r"<(?:thought|think)>(.*?)</(?:thought|think)>", re.IGNORECASE | re.DOTALL)
 _JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 

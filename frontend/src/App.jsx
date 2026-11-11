@@ -3,6 +3,8 @@ import Navbar from './components/Navbar';
 import HomePage from './components/HomePage';
 import AuthPage from './components/AuthPage';
 import DashboardPage from './components/DashboardPage';
+import DashboardHeader from './components/DashboardHeader';
+import { mapApiDispute } from './utils/disputes';
 import { 
   INITIAL_DISPUTES, 
   INITIAL_CHAT_CONVERSATIONS, 
@@ -40,40 +42,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            const mapped = data.map(item => {
-              const order = item.telemetry_order || {};
-              const carrier = item.telemetry_carrier || {};
-              const firstLineItem = Array.isArray(order.line_items) && order.line_items[0];
-              return {
-                dispute_id: item.dispute_id,
-                buyer_email: item.customer_email || order.customer_email || 'customer@lexishield.io',
-                buyer_name: order.customer_name || 'Verified Buyer',
-                amount: item.amount ?? 199.99,
-                currency: item.currency || 'USD',
-                reason: item.reason || item.dispute_reason || 'UNAUTHORISED',
-                stage: item.stage || item.dispute_stage || 'CLAIM',
-                pipeline_status: item.pipeline_status || 'DEFENDED',
-                win_probability: item.win_probability ?? 0.92,
-                created_at: item.created_at || new Date().toISOString(),
-                evidence_score: Math.round((item.win_probability ?? 0.92) * 100),
-                fee_saved: item.dispute_fee_applied || 15.0,
-                tracking_number: carrier.tracking_number || '1Z9999999999999999',
-                carrier: carrier.carrier_name || 'UPS',
-                device_ip: order.checkout_ip || '198.51.100.42',
-                device_hash: order.device_fingerprint || 'DEV-FINGERPRINT-LEXI',
-                buyer_sentiment: item.hitl_flagged ? 'HITL Review' : 'Active Case',
-                order_id: item.order_id || order.order_id || 'SHP-LIVE',
-                item_title: firstLineItem?.name || 'Commercial Electronics',
-                ai_summary: item.rebuttal_statement || 'Synthesized evidence rebuttal.',
-                action_taken: item.action_taken || 'DEFEND',
-                pdf_dossier_sha256: item.pdf_dossier_sha256 || null,
-                specialist_agent: item.specialist_agent || null,
-                persona_mode: item.persona_mode || null,
-                llm_tier_used: item.llm_tier_used || null,
-                reasoning_steps: item.reasoning_steps || [],
-                rma_number: item.rma_number || null,
-              };
-            });
+            const mapped = data.map((item) => mapApiDispute(item));
             setDisputes(prev => {
               // Combine unique by dispute_id
               const existingIds = new Set(prev.map(d => d.dispute_id));
@@ -142,6 +111,10 @@ export default function App() {
     }));
   };
 
+  const handleUpdateDispute = (disputeId, changes) => {
+    setDisputes(prev => prev.map(d => (d.dispute_id === disputeId ? { ...d, ...changes } : d)));
+  };
+
   const handleSendMessage = (disputeId, messageObj) => {
     setChatConversations(prev => ({
       ...prev,
@@ -173,8 +146,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans selection:bg-sky-100 selection:text-sky-900">
       
-      {/* Top Navigation Bar */}
-      <Navbar onNavigate={navigateTo} currentView={currentView} />
+      {/* Top Navigation Bar: the dashboard gets its own app header */}
+      {currentView === 'dashboard' ? (
+        <DashboardHeader merchantProfile={merchantProfile} onNavigate={navigateTo} />
+      ) : (
+        <Navbar onNavigate={navigateTo} currentView={currentView} />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1">
@@ -196,6 +173,7 @@ export default function App() {
           <DashboardPage
             disputes={disputes}
             onAddDispute={handleAddDispute}
+            onUpdateDispute={handleUpdateDispute}
             merchantProfile={merchantProfile}
             chatConversations={chatConversations}
             onSendMessage={handleSendMessage}
@@ -204,18 +182,20 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-slate-50 py-8 text-center text-xs text-slate-500">
-        <div className="container mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800">LexiShield</span>
-            <span>• Autonomous Dispute Resolution Engine</span>
+      {/* Footer (marketing pages only) */}
+      {currentView !== 'dashboard' && (
+        <footer className="border-t border-slate-200 bg-slate-50 py-8 text-center text-xs text-slate-500">
+          <div className="container mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-800">LexiShield</span>
+              <span>• Autonomous Dispute Resolution Engine</span>
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Enterprise PayPal Dispute Defense & Pre-Chargeback Deflection
+            </div>
           </div>
-          <div className="text-[11px] text-slate-500">
-            Enterprise PayPal Dispute Defense & Pre-Chargeback Deflection
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
     </div>
   );

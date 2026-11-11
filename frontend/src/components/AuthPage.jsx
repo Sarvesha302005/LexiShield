@@ -11,7 +11,7 @@ const BRAND_POINTS = [
 const ONE_CLICK_PROFILE = {
   merchant_id: 'merch_apex_us_01',
   business_name: 'Apex Electronics Store (US)',
-  paypal_account: 'merchant-sandbox-apex@lexishield.io',
+  paypal_account: 'payments@apex-electronics.com',
   mode: 'SANDBOX_AUTHENTICATED',
 };
 
@@ -64,7 +64,7 @@ export default function AuthPage({ onConnectSuccess, onNavigateDashboard }) {
       {
         merchant_id: 'merch_custom_01',
         business_name: keys.store.trim() || 'Custom Merchant Store',
-        paypal_account: 'paypal-sandbox@merchant.com',
+        paypal_account: `Client ID ${keys.clientId.trim().slice(0, 8)}…`,
         mode: 'BYOK_AUTHENTICATED',
       },
       'keys'

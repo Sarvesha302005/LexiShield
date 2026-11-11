@@ -49,8 +49,8 @@ class Settings(BaseSettings):
 
     OPENROUTER_API_KEY: str = "mock_openrouter_api_key"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
-    OPENROUTER_PRIMARY_MODEL: str = "google/gemini-2.0-flash-thinking-exp:free"
-    OPENROUTER_FALLBACK_MODEL: str = "meta-llama/llama-3.3-70b-instruct:free"
+    OPENROUTER_PRIMARY_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    OPENROUTER_FALLBACK_MODEL: str = "nvidia/nemotron-3.5-super-vl:free"
     OPENROUTER_TIMEOUT_SECONDS: float = 25.0
     OPENROUTER_SITE_URL: str = "https://lexishield.io"
     OPENROUTER_APP_NAME: str = "LexiShield Dispute Defense Engine"

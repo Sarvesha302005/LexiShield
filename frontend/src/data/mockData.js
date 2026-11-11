@@ -187,7 +187,7 @@ export const INITIAL_CHAT_CONVERSATIONS = {
 export const INITIAL_MERCHANT_PROFILE = {
   merchant_id: "merch_apex_us_01",
   business_name: "Apex Electronics Store (US)",
-  paypal_account: "merchant-sandbox-apex@lexishield.io",
+  paypal_account: "payments@apex-electronics.com",
   shopify_domain: "apex-electronics.myshopify.com",
   paypal_mode: "SANDBOX_REST_V2",
   auto_defense_enabled: true,

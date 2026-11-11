@@ -29,6 +29,8 @@ def override_settings():
     settings.ENVIRONMENT = "test"
     settings.STRICT_WEBHOOK_VERIFICATION = True
     settings.PAYPAL_WEBHOOK_ID = "TEST_WEBHOOK_ID_001"
+    # Keep tests offline even when a real key is in .env (otherwise every test calls OpenRouter).
+    settings.OPENROUTER_API_KEY = "mock_openrouter_api_key"
     return settings
 
 

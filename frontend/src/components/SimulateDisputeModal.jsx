@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, AlertCircle, Bot, Zap, CheckCircle2 } from 'lucide-react';
+import { mapApiDispute } from '../utils/disputes';
 
 export default function SimulateDisputeModal({ onClose, onSimulate }) {
   const [scenario, setScenario] = useState('unauthorized');
@@ -61,37 +62,7 @@ export default function SimulateDisputeModal({ onClose, onSimulate }) {
       });
       if (resp.ok) {
         const record = await resp.json();
-        const order = record.telemetry_order || {};
-        const carrier = record.telemetry_carrier || {};
-        onSimulate({
-          dispute_id: record.dispute_id,
-          buyer_email: record.customer_email || buyerEmail,
-          buyer_name: order.customer_name || buyerName,
-          amount: record.amount,
-          currency: record.currency || 'USD',
-          reason: record.reason,
-          stage: record.stage,
-          pipeline_status: record.pipeline_status,
-          win_probability: record.win_probability ?? 0.90,
-          created_at: record.created_at || new Date().toISOString(),
-          evidence_score: Math.round((record.win_probability ?? 0.90) * 100),
-          fee_saved: record.dispute_fee_applied || 15.0,
-          tracking_number: carrier.tracking_number || 'TRK-SIMULATED',
-          carrier: carrier.carrier_name || 'UPS',
-          device_ip: order.checkout_ip || '198.51.100.42',
-          device_hash: order.device_fingerprint || 'DEV-FINGERPRINT-LEXI',
-          buyer_sentiment: record.hitl_flagged ? 'HITL Review' : 'New Claim Ingested',
-          order_id: record.order_id || 'ORD-LIVE',
-          item_title: itemTitle,
-          ai_summary: record.rebuttal_statement || 'Synthesized horizontal agent rebuttal.',
-          action_taken: record.action_taken || 'PROVIDED_EVIDENCE_DOSSIER',
-          pdf_dossier_sha256: record.pdf_dossier_sha256 || null,
-          specialist_agent: record.specialist_agent || null,
-          persona_mode: record.persona_mode || null,
-          llm_tier_used: record.llm_tier_used || null,
-          reasoning_steps: record.reasoning_steps || [],
-          rma_number: record.rma_number || null,
-        });
+        onSimulate(mapApiDispute(record, { buyer_name: buyerName, buyer_email: buyerEmail, item_title: itemTitle }));
         setIsSubmitting(false);
         onClose();
         return;
