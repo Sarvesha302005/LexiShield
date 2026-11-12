@@ -18,13 +18,13 @@ from src.models.schemas import (
     BillingTelemetryInfo,
     BuyerInfo,
     CarrierTrackingInfo,
+    DisputedTransaction,
     DisputeMessage,
     DisputeReason,
     DisputeRecord,
     DisputeStage,
     DisputeStatsSummary,
     DisputeStatus,
-    DisputedTransaction,
     HITLOverrideRequest,
     Money,
     OrderCustomerInfo,
@@ -393,7 +393,9 @@ class DisputePipeline:
                 DisputedTransaction(
                     buyer_transaction_id=spec["txn_id"],
                     seller_transaction_id=spec["txn_id"],
-                    gross_amount=Money(currency_code=spec["currency"], value=f"{spec['amount']:.2f}"),
+                    gross_amount=Money(
+                        currency_code=spec["currency"], value=f"{spec['amount']:.2f}"
+                    ),
                     invoice_number=spec["order_id"],
                     custom=spec["order_id"],
                     buyer=BuyerInfo(name=spec["buyer_name"], email=spec["buyer_email"]),
