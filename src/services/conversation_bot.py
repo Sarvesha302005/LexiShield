@@ -2,8 +2,8 @@
 Interactive Conversational Settlement Bot (Inquiry Stage).
 Manages autonomous multi-turn buyer negotiation on PayPal prior to formal claim escalation.
 Implements a 3-step tiered resolution ladder:
-1. Inquire & provide tracking/troubleshooting
-2. Offer 15-20% partial refund or reshipment for defects
+1. Inquire & provide tracking/troubleshooting (Customer Diplomat persona)
+2. Offer 50% courtesy partial refund or replacement per Decision Matrix
 3. Final formal settlement or arbitration handover
 """
 
@@ -63,6 +63,7 @@ class ConversationalSettlementBot:
         carrier: CarrierTrackingInfo,
         order: OrderCustomerInfo,
         incoming_buyer_message: str | None = None,
+        custom_step1_message: str | None = None,
     ) -> tuple[NegotiationStep, str, float | None]:
         """
         Evaluate conversational context and decide next action on resolution ladder:
@@ -80,7 +81,7 @@ class ConversationalSettlementBot:
         # Step 1: Initial Troubleshooting & Tracking Proof
         if state.turn_count == 1:
             state.current_step = NegotiationStep.STEP_1_TROUBLESHOOTING
-            msg = (
+            msg = custom_step1_message or (
                 f"Hello {order.customer_name}, thank you for contacting us regarding Order {order.order_id}. "
                 f"Our logistics records show that package {carrier.tracking_number} was marked as {carrier.status} "
                 f"by {carrier.carrier_name}. If you have not located your package or encountered an issue, please let us know "
@@ -91,15 +92,15 @@ class ConversationalSettlementBot:
             )
             return state.current_step, msg, None
 
-        # Step 2: Tiered Partial Refund or Reshipment Offer (15% - 20%)
+        # Step 2: Courtesy Partial Refund Offer (50% per Universal Defense Decision Matrix)
         elif state.turn_count == 2:
             state.current_step = NegotiationStep.STEP_2_PARTIAL_REFUND
-            offer_amt = round(order_val * 0.20, 2)  # 20% courtesy concession
+            offer_amt = round(order_val * 0.50, 2)  # 50% courtesy partial refund
             state.active_offer_amount = offer_amt
             msg = (
                 f"Hello {order.customer_name}, we appreciate your patience while we investigate this. "
                 f"To resolve this promptly and ensure your satisfaction, we would like to offer an immediate "
-                f"20% courtesy partial refund of ${offer_amt:.2f} while keeping the order active, or alternatively "
+                f"50% courtesy partial refund of ${offer_amt:.2f} while keeping the order active, or alternatively "
                 f"we can ship an immediate replacement unit at no cost to you. Please let us know your preference."
             )
             state.message_history.append(

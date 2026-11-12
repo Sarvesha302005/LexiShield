@@ -37,6 +37,50 @@ class WarehouseService:
             logger.info(f"Retrieved registered warehouse telemetry for order {order_id}.")
             return self._mock_registry[order_id]
 
+        # Check SQLite lexishield.db for seeded warehouse QC scale weight and serials
+        try:
+            import json
+            import sqlite3
+
+            from src.core.config import get_sqlite_db_path
+
+            conn = sqlite3.connect(get_sqlite_db_path(), timeout=3.0)
+            c = conn.cursor()
+            row = c.execute(
+                """
+                SELECT scale_measured_weight_kg, scanned_serials, order_date
+                FROM orders WHERE order_id = ? OR transaction_id = ?
+            """,
+                (order_id, order_id),
+            ).fetchone()
+            conn.close()
+
+            if row and row[0] is not None:
+                measured_kg = float(row[0])
+                serials = json.loads(row[1]) if row[1] else []
+                logger.info(
+                    f"Retrieved persistent Zapier warehouse QC for {order_id}: weight={measured_kg}kg, serials={serials}."
+                )
+                return WarehouseFulfillmentInfo(
+                    order_id=order_id,
+                    pack_timestamp=row[2] or "2026-10-20T08:30:00Z",
+                    warehouse_id="WH-US-WEST-01",
+                    packer_id="PACKER-4412",
+                    scale_measured_weight_kg=round(measured_kg, 3),
+                    expected_weight_kg=round(measured_kg, 3),
+                    weight_delta_percent=0.0,
+                    scanned_barcodes=[
+                        f"UPC-8892401-{order_id[-4:] if len(order_id) >= 4 else '1001'}"
+                    ],
+                    scanned_serials=serials
+                    or [f"SN-LEXI-992014-{order_id[-4:] if len(order_id) >= 4 else 'A01'}"],
+                    tamper_seal_id=f"SEAL-SECURE-{order_id[-6:] if len(order_id) >= 6 else '78910'}",
+                    packing_station_photo_url=f"https://warehouse-telemetry.cdn.example.com/qc-photos/{order_id}_pack_station.jpg",
+                    quality_inspection_passed=True,
+                )
+        except Exception as exc:
+            logger.debug(f"SQLite warehouse lookup notice: {exc}")
+
         is_weight_mismatch = "WEIGHT_MISMATCH" in order_id.upper()
         is_damaged_or_failed = "INSPECTION_FAIL" in order_id.upper()
 

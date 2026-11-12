@@ -51,7 +51,7 @@ def test_conversational_settlement_bot_3_step_ladder():
     """
     Test Conversational Settlement Bot during INQUIRY:
     Turn 1: Inquire with tracking and troubleshooting
-    Turn 2: Offer 20% partial refund or reshipment
+    Turn 2: Offer 50% partial refund or reshipment (per Decision Matrix)
     Turn 3: Escalate to formal arbitration
     """
     bot = ConversationalSettlementBot()
@@ -91,8 +91,8 @@ def test_conversational_settlement_bot_3_step_ladder():
         dispute, carrier, order, incoming_buyer_message="Still haven't found it"
     )
     assert step2 == NegotiationStep.STEP_2_PARTIAL_REFUND
-    assert offer2 == 20.00  # 20% partial refund of $100
-    assert "20% courtesy partial refund" in msg2
+    assert offer2 == 50.00  # 50% partial refund of $100
+    assert "50% courtesy partial refund" in msg2
 
     # Turn 3
     step3, msg3, offer3 = bot.advance_negotiation(

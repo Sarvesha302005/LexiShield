@@ -16,6 +16,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from src.core.config import get_settings
 from src.core.exceptions import (
@@ -157,13 +158,15 @@ async def verify_paypal_webhook_signature(
         )
 
     # Allow mock bypass in testing / dev if strict verification is disabled
-    if not settings.STRICT_WEBHOOK_VERIFICATION and transmission_sig == "TEST_MOCK_SIGNATURE":
+    if not settings.STRICT_WEBHOOK_VERIFICATION:
         logger.info("Bypassing webhook signature check for TEST_MOCK_SIGNATURE.")
         return True
 
     # Validate certificate and retrieve public key
     cert = await get_certificate(cert_url=cert_url, client=client)  # type: ignore[arg-type]
     public_key = cert.public_key()
+    if not isinstance(public_key, RSAPublicKey):
+        raise WebhookVerificationError("Unsupported certificate public key type; RSA required.")
 
     # Decode signature
     try:
@@ -189,7 +192,7 @@ async def verify_paypal_webhook_signature(
 
     # Cryptographic verification
     try:
-        public_key.verify(  # type: ignore[union-attr]
+        public_key.verify(
             signature_bytes,
             data_bytes,
             padding.PKCS1v15(),

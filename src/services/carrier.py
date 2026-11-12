@@ -30,17 +30,80 @@ class CarrierService:
         self,
         tracking_number: str | None = None,
         order_id: str | None = None,
+        customer_name: str | None = None,
+        customer_email: str | None = None,
     ) -> CarrierTrackingInfo:
         """
         Fetch carrier telemetry by tracking number or order ID.
         Simulates carrier API calls with realistic telemetry, GPS, and signature records.
         """
-        lookup_key = tracking_number or order_id or "DEFAULT"
+        lookup_key = tracking_number or order_id or customer_email or customer_name or "DEFAULT"
 
         # Check registered overrides first
         if lookup_key in self._mock_registry:
             logger.info(f"Retrieved registered carrier telemetry for {lookup_key}.")
             return self._mock_registry[lookup_key]
+
+        # Check SQLite lexishield.db for seeded Carrier telemetry
+        try:
+            import sqlite3
+
+            from src.core.config import get_sqlite_db_path
+
+            conn = sqlite3.connect(get_sqlite_db_path(), timeout=3.0)
+            c = conn.cursor()
+            row = c.execute(
+                """
+                SELECT carrier_name, tracking_number, delivery_status, delivered_date,
+                       signed_by, shipping_address, gps_latitude, gps_longitude, order_date
+                FROM orders 
+                WHERE tracking_number = ? OR order_id = ? OR transaction_id = ?
+                   OR customer_email = ? OR customer_name = ?
+            """,
+                (
+                    lookup_key,
+                    lookup_key,
+                    lookup_key,
+                    customer_email or lookup_key,
+                    customer_name or lookup_key,
+                ),
+            ).fetchone()
+            conn.close()
+
+            if row and row[1]:
+                logger.info(
+                    f"Retrieved persistent Zapier carrier tracking for {lookup_key}: {row[1]}."
+                )
+                return CarrierTrackingInfo(
+                    tracking_number=row[1],
+                    carrier_name=row[0] or "UPS Next Day Air",
+                    status=row[2] or "DELIVERED",
+                    ship_date=row[8],
+                    delivered_date=row[3],
+                    destination_address=row[5],
+                    gps_latitude=row[6],
+                    gps_longitude=row[7],
+                    signed_by=row[4] or "Verified Delivery",
+                    signature_url=f"https://carrier-telemetry.cdn.example.com/signatures/{row[1]}.png",
+                    events=[
+                        TrackingEvent(
+                            timestamp=row[8],
+                            status="PICKED_UP",
+                            location="Distribution Facility",
+                            description="Package accepted from merchant warehouse",
+                        ),
+                        TrackingEvent(
+                            timestamp=row[3] or "2026-10-24T14:15:30Z",
+                            status="DELIVERED",
+                            location=row[5].split(",")[-2].strip()
+                            if "," in row[5]
+                            else "Destination City",
+                            description=f"Delivered to front door. Signed: {row[4]}",
+                        ),
+                    ],
+                )
+        except Exception as exc:
+            logger.debug(f"SQLite carrier lookup notice: {exc}")
 
         if not tracking_number and not order_id:
             raise CarrierTelemetryError("Both tracking_number and order_id are missing.")

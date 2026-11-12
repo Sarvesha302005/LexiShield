@@ -23,6 +23,9 @@ from src.core.exceptions import (
     PayPalDisputeEngineException,
     WebhookVerificationError,
 )
+from src.core.tenant import get_tenant_manager
+from src.database import init_db, seed_db_if_empty
+from src.workflows.dispute_pipeline import get_dispute_pipeline
 
 # Configure structured logging
 settings = get_settings()
@@ -37,10 +40,18 @@ logger = logging.getLogger("dispute_engine")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Application lifespan context:
-    Initializes required storage directories, warmups, and teardown.
+    Initializes storage directories, verifies database schema, seeds portfolio data,
+    and synchronizes dispute and tenant registries.
     """
     logger.info("Initializing PayPal Dispute Resolution Engine...")
     os.makedirs(os.path.join(os.getcwd(), "artifacts", "dossiers"), exist_ok=True)
+    try:
+        await init_db()
+        await seed_db_if_empty()
+        await get_tenant_manager().sync_from_db()
+        await get_dispute_pipeline().sync_from_db()
+    except Exception as exc:
+        logger.warning(f"Database lifespan startup notice: {exc}")
     yield
     logger.info("Shutting down PayPal Dispute Resolution Engine.")
 
@@ -142,8 +153,15 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+ASSETS_DIR = os.path.join(STATIC_DIR, "assets")
+if os.path.exists(ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
 
 @app.get("/", tags=["System"])
+@app.get("/login", tags=["System"])
+@app.get("/auth", tags=["System"])
+@app.get("/dashboard", tags=["System"])
 async def root(request: Request):
     """
     Root Web Entrypoint:

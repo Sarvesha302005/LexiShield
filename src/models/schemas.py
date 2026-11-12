@@ -31,6 +31,24 @@ class DisputeReason(StrEnum):
     OTHER = "OTHER"
 
 
+def normalize_dispute_reason(raw_reason: str | DisputeReason) -> DisputeReason:
+    """Normalize incoming PayPal / simulator reason strings into canonical DisputeReason."""
+    if isinstance(raw_reason, DisputeReason):
+        return raw_reason
+    normalized = raw_reason.strip().upper()
+    if normalized in {e.value for e in DisputeReason}:
+        return DisputeReason(normalized)
+    if normalized in ("UNAUTHORISED_TRANSACTION", "UNAUTHORIZED_TRANSACTION", "UNAUTHORIZED"):
+        return DisputeReason.UNAUTHORISED
+    if "RECURRING" in normalized or "BILLING" in normalized or "SUBSCRIPTION" in normalized:
+        return DisputeReason.CANCELED_RECURRING_BILLING
+    if "NOT_RECEIVED" in normalized or normalized == "INR":
+        return DisputeReason.MERCHANDISE_OR_SERVICE_NOT_RECEIVED
+    if "NOT_AS_DESCRIBED" in normalized or normalized == "SNAD":
+        return DisputeReason.MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED
+    return DisputeReason.OTHER
+
+
 class DisputeStatus(StrEnum):
     """PayPal dispute processing statuses."""
 
@@ -76,6 +94,14 @@ class DisputedTransaction(BaseModel):
     buyer: BuyerInfo | None = None
 
 
+class PayPalDisputeMessage(BaseModel):
+    """A message in the PayPal dispute thread (resource.messages[])."""
+
+    posted_by: str  # "BUYER", "SELLER" or "ARBITER"
+    time_posted: str | None = None
+    content: str | None = None
+
+
 class PayPalDisputeResource(BaseModel):
     """PayPal Dispute Resource payload."""
 
@@ -89,6 +115,19 @@ class PayPalDisputeResource(BaseModel):
     status: DisputeStatus = DisputeStatus.WAITING_FOR_SELLER_RESPONSE
     dispute_life_cycle_stage: str | None = None
     seller_response_due_date: str | None = None
+    messages: list[PayPalDisputeMessage] = Field(default_factory=list)
+
+
+class DisputeMessage(BaseModel):
+    """A message stored on a dispute record (buyer replies and seller responses)."""
+
+    sender: str  # "BUYER", "SELLER" or "ARBITER"
+    content: str
+    timestamp: str
+    # "PAYPAL" (webhook), "AI_REPLY", "TEMPLATE_REPLY", "DASHBOARD", or for demo buyer messages
+    # "SIMULATED_TEMPLATE", "SIMULATED_AI" and "SIMULATED_MANUAL"
+    source: str = "PAYPAL"
+    llm_tier_used: str | None = None
 
 
 class PayPalWebhookEvent(BaseModel):
@@ -180,6 +219,43 @@ class OrderCustomerInfo(BaseModel):
     past_disputes_count: int = 0
     customer_lifetime_value: float = 650.00
     merchant_monthly_disputes_count: int = 25
+    merchant_dispute_ratio: float = Field(
+        default=0.004,
+        description="Trailing merchant dispute-to-sales ratio (e.g. 0.004 = 0.4%)",
+    )
+    avs_match: str = Field(
+        default="Y/Y",
+        description="Address Verification System match code at authorization (e.g. 'Y/Y', 'N/N')",
+    )
+    cvv_match: bool = Field(
+        default=True,
+        description="Card Verification Value match at authorization",
+    )
+    checkout_ip: str = Field(
+        default="198.51.100.42",
+        description="Buyer IP address captured at checkout",
+    )
+    device_fingerprint: str = Field(
+        default="DEV-FINGERPRINT-LEXI-8841",
+        description="Device fingerprint hash captured at checkout",
+    )
+
+
+class BillingTelemetryInfo(BaseModel):
+    """SaaS subscription assent, cancellation policy window, and server session telemetry."""
+
+    order_id: str
+    subscription_id: str | None = None
+    clickwrap_assent_verified: bool = True
+    clickwrap_assent_timestamp: str | None = None
+    clickwrap_ip_address: str | None = None
+    tos_version: str = "2026.1-SaaS-Enterprise"
+    alleged_cancellation_date: str | None = None
+    cancellation_within_grace_period: bool = False
+    post_cancellation_login_timestamps: list[str] = Field(default_factory=list)
+    post_cancellation_api_requests: int = 0
+    active_sessions_count: int = 0
+    last_active_ip: str | None = None
 
 
 # ==============================================================================
@@ -224,6 +300,7 @@ class DisputeRecord(BaseModel):
     hitl_override_action: str | None = None
     rebuttal_statement: str | None = None
     pdf_dossier_path: str | None = None
+    pdf_dossier_sha256: str | None = None
     paypal_api_response: dict[str, Any] | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -232,10 +309,17 @@ class DisputeRecord(BaseModel):
     compliance_disqualifications: list[str] = Field(default_factory=list)
     visa_ce3_qualified: bool | None = None
     rma_number: str | None = None
+    specialist_agent: str | None = None
+    persona_mode: str | None = None
+    llm_tier_used: str | None = None
+    seller_rights_met: bool | None = None
+    reasoning_steps: list[str] = Field(default_factory=list)
     telemetry_carrier: CarrierTrackingInfo | None = None
     telemetry_warehouse: WarehouseFulfillmentInfo | None = None
     telemetry_order: OrderCustomerInfo | None = None
+    telemetry_billing: BillingTelemetryInfo | None = None
     audit_trail: list[str] = Field(default_factory=list)
+    messages: list[DisputeMessage] = Field(default_factory=list)
 
 
 class HITLOverrideRequest(BaseModel):

@@ -37,3 +37,21 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_PRIMARY_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
+      - key: OPENROUTER_FALLBACK_MODEL
+        value: nvidia/nemotron-3.5-super-vl:free
+      - key: OPENROUTER_BACKUP_MODEL
+        value: nvidia/nemotron-3.5-super-vl:free
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: NVIDIA_PRIMARY_MODEL
+        value: nvidia/nemotron-3.5-super-vl-120b-a12b
+      - key: NVIDIA_FALLBACK_MODEL
+        value: nvidia/nemotron-3.5-lightning-30b-a3b
+      - key: NVIDIA_CHAT_PRIMARY_MODEL
+        value: nvidia/nemotron-3.5-bolt-e4b
+      - key: NVIDIA_CHAT_FALLBACK_MODEL
+        value: nvidia/nemotron-3.5-lightning-30b-a3b

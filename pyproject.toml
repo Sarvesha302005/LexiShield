@@ -7,7 +7,7 @@ name = "paypal-dispute-engine"
 version = "1.0.0"
 description = "Enterprise-grade Automated PayPal Dispute Resolution Engine"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Principal Systems and AI Engineer", email = "ai-eng@example.com" }
@@ -17,10 +17,15 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.8.0",
     "pydantic-settings>=2.4.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "greenlet>=3.0.0",
+    "aiosqlite>=0.20.0",
     "httpx>=0.27.0",
     "reportlab>=4.2.0",
     "cryptography>=43.0.0",
-    "instructor>=1.4.0",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
     "python-multipart>=0.0.9",
     "python-dotenv>=1.0.1",
 ]
@@ -50,4 +55,3 @@ ignore = ["B008", "BLE001", "E501"]
 
 [tool.bandit]
 skips = ["B104", "B105", "B303"]
-

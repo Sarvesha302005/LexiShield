@@ -4,19 +4,43 @@ Provides endpoints to monitor dispute lifecycles, inspect evidence, download PDF
 """
 
 import os
+import sqlite3
+import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from src.core.exceptions import DisputeNotFoundError
 from src.models.schemas import (
+    BuyerInfo,
+    DisputedTransaction,
     DisputeRecord,
+    DisputeStage,
     DisputeStatsSummary,
+    DisputeStatus,
     HITLOverrideRequest,
+    Money,
+    PayPalDisputeResource,
+    PayPalWebhookEvent,
+    normalize_dispute_reason,
 )
 from src.workflows.dispute_pipeline import DisputePipeline, get_dispute_pipeline
 
 router = APIRouter(prefix="/disputes", tags=["Dispute Operations & HITL"])
+
+
+class SimulateDisputeRequest(BaseModel):
+    """Payload to trigger an autonomous dispute resolution simulation."""
+
+    order_id: str | None = Field(None, description="e.g. 'ORD-ZAP-10294' (Marcus Vance)")
+    customer_name: str | None = Field(None, description="e.g. 'Marcus Vance'")
+    customer_email: str | None = Field(None, description="e.g. 'marcus.vance@gmail.com'")
+    reason: str = Field("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", description="Dispute reason code")
+    stage: str = Field("CLAIM", description="Stage: 'INQUIRY' or 'CLAIM'")
+    amount: float | None = Field(None, description="Disputed amount, defaults to order total")
+    merchant_id: str = Field("default-merchant", description="Tenant merchant ID")
 
 
 @router.get(
@@ -101,10 +125,15 @@ async def download_pdf_dossier(
             detail=f"No PDF evidentiary dossier found for dispute '{dispute_id}'.",
         )
 
+    headers: dict[str, str] = {}
+    if record.pdf_dossier_sha256:
+        headers["X-Dossier-SHA256"] = record.pdf_dossier_sha256
+
     return FileResponse(
         path=pdf_path,
         media_type="application/pdf",
         filename=f"PayPal_Evidence_{dispute_id}.pdf",
+        headers=headers,
     )
 
 
@@ -131,3 +160,143 @@ async def override_hitl_decision(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to apply HITL override: {exc!s}",
         ) from exc
+
+
+class DisputeMessageRequest(BaseModel):
+    """A message to post into a dispute thread."""
+
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post(
+    "/{dispute_id}/messages",
+    response_model=DisputeRecord,
+    summary="Send Message to Buyer",
+    description="Sends a merchant-written message to the buyer through PayPal and stores it on the dispute.",
+)
+async def send_message_to_buyer(
+    dispute_id: str,
+    req: DisputeMessageRequest,
+    pipeline: DisputePipeline = Depends(get_dispute_pipeline),
+) -> DisputeRecord:
+    try:
+        return await pipeline.send_seller_message(
+            dispute_id=dispute_id, message=req.message.strip()
+        )
+    except DisputeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+class SimulateBuyerMessageRequest(BaseModel):
+    """Optional fixed buyer text; when omitted the buyer message is generated."""
+
+    message: str | None = Field(None, min_length=1, max_length=2000)
+
+
+@router.post(
+    "/{dispute_id}/simulate-buyer-message",
+    response_model=DisputeRecord,
+    summary="Simulate Buyer Reply",
+    description=(
+        "Demo helper for buyer and merchant communication. Without a `message`, the buyer's first message "
+        "is a template for the dispute reason and later ones are written by the AI playing the buyer. "
+        "The message runs through the same path a real PayPal CUSTOMER.DISPUTE.UPDATED webhook takes, "
+        "so the merchant's AI reply follows automatically."
+    ),
+)
+async def simulate_buyer_message(
+    dispute_id: str,
+    req: SimulateBuyerMessageRequest | None = None,
+    pipeline: DisputePipeline = Depends(get_dispute_pipeline),
+) -> DisputeRecord:
+    text = req.message.strip() if req and req.message else None
+    try:
+        return await pipeline.simulate_buyer_turn(dispute_id=dispute_id, message=text)
+    except DisputeNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/simulate",
+    response_model=DisputeRecord,
+    summary="Simulate Inbound PayPal Dispute",
+    description="Trigger the live autonomous dispute resolution pipeline against any seeded customer order (e.g. Marcus Vance INR).",
+)
+async def simulate_dispute(
+    req: SimulateDisputeRequest,
+    pipeline: DisputePipeline = Depends(get_dispute_pipeline),
+) -> DisputeRecord:
+    """
+    Simulates incoming PayPal dispute webhooks for seeded customer orders.
+    Pulls carrier telemetry, warehouse QC weights, and serial numbers directly from SQLite,
+    executes Seller Protection compliance checks, computes win probability,
+    and generates the evidentiary ReportLab PDF rebuttal dossier.
+    """
+    # 1. Query SQLite for order details safely
+    row = None
+    try:
+        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        c = conn.cursor()
+        if req.order_id:
+            row = c.execute(
+                "SELECT order_id, transaction_id, customer_name, customer_email, total_amount, currency FROM orders WHERE order_id = ? OR transaction_id = ?",
+                (req.order_id, req.order_id),
+            ).fetchone()
+        if not row and (req.customer_name or req.customer_email):
+            row = c.execute(
+                "SELECT order_id, transaction_id, customer_name, customer_email, total_amount, currency FROM orders WHERE customer_name = ? OR customer_email = ?",
+                (req.customer_name or "", req.customer_email or ""),
+            ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        row = None
+
+    order_id = row[0] if row else (req.order_id or "ORD-ZAP-10294")
+    txn_id = row[1] if row else f"TXN-{order_id}"
+    buyer_name = row[2] if row else (req.customer_name or "Marcus Vance")
+    buyer_email = row[3] if row else (req.customer_email or "marcus.vance@gmail.com")
+    amount = req.amount or (float(row[4]) if row else 249.99)
+    currency = row[5] if row else "USD"
+
+    # Map reason and stage strings to canonical enums
+    try:
+        stage_enum = DisputeStage(req.stage.upper())
+    except ValueError:
+        stage_enum = DisputeStage.CLAIM if "CLAIM" in req.stage.upper() else DisputeStage.INQUIRY
+
+    reason_enum = normalize_dispute_reason(req.reason)
+
+    sim_id = f"PP-SIM-{uuid.uuid4().hex[:8].upper()}"
+    webhook_event = PayPalWebhookEvent(
+        id=f"WH-EVT-{uuid.uuid4().hex[:12].upper()}",
+        event_version="1.0",
+        create_time=datetime.now(UTC).isoformat(),
+        resource_type="dispute",
+        event_type="CUSTOMER.DISPUTE.CREATED",
+        summary=f"Simulated PayPal Dispute for {order_id} ({buyer_name})",
+        resource=PayPalDisputeResource(
+            dispute_id=sim_id,
+            create_time=datetime.now(UTC).isoformat(),
+            disputed_transactions=[
+                DisputedTransaction(
+                    buyer_transaction_id=txn_id,
+                    seller_transaction_id=txn_id,
+                    gross_amount=Money(currency_code=currency, value=f"{amount:.2f}"),
+                    invoice_number=order_id,
+                    custom=order_id,
+                    buyer=BuyerInfo(name=buyer_name, email=buyer_email),
+                )
+            ],
+            dispute_amount=Money(currency_code=currency, value=f"{amount:.2f}"),
+            dispute_stage=stage_enum,
+            dispute_reason=reason_enum,
+            status=DisputeStatus.WAITING_FOR_SELLER_RESPONSE,
+        ),
+    )
+
+    record = await pipeline.process_webhook_event(
+        event=webhook_event,
+        correlation_id=f"CORR-SIM-{sim_id}",
+        merchant_id=req.merchant_id,
+    )
+    return record

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.0] - 2026-11-10
+
+### Added
+- **Horizontal Specialist Agentic Hierarchy (`src/agents/`):** Replaced monolithic LLM evaluation with `DisputeSupervisor` routing across `INRAgent`, `SNADAgent`, `FraudAgent`, and `BillingAgent`.
+- **3-Tier OpenRouter LLM Orchestration (`src/services/llm_orchestrator.py`):** LangChain-powered cascade from Tier 1 (`google/gemini-2.0-flash-thinking-exp:free` with `<thought>` trace extraction) to Tier 2 (`meta-llama/llama-3.3-70b-instruct:free`) to Tier 3 (local deterministic heuristics).
+- **SaaS Billing & Subscription Telemetry (`src/services/billing.py`):** Added clickwrap ToS assent, cancellation grace-window audits, and post-cancellation server login/API activity telemetry.
+- **Stage-Aware Dynamic Personas & Seller Rights First:** Enforced Universal Defense for any transaction size ($1 to $10,000+) when valid proof exists, Customer Diplomat vs Adversarial Legal Defense personas, and 50% courtesy offers on failed-rights inquiries.
+- **Cryptographic PDF Dossier Integrity:** Added SHA-256 digest generation (`pdf_dossier_sha256`), SQLite persistence, audit-trail logging, `X-Dossier-SHA256` download headers, Exhibit C SaaS telemetry, and transparent chain-of-thought rendering.
+
+---
+
 ## [2.1.0] - 2026-10-19
 
 ### Added
