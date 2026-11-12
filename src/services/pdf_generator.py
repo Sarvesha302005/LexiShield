@@ -9,7 +9,7 @@ import io
 import logging
 import os
 from datetime import UTC, datetime
-from xml.sax.saxutils import escape as xml_escape
+from html import escape as xml_escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter

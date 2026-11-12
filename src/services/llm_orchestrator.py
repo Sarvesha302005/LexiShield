@@ -27,7 +27,9 @@ from src.core.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 # Gemini-style <thought> and the <think> tags used by Nemotron and other reasoning models.
-_THOUGHT_PATTERN = re.compile(r"<(?:thought|think)>(.*?)</(?:thought|think)>", re.IGNORECASE | re.DOTALL)
+_THOUGHT_PATTERN = re.compile(
+    r"<(?:thought|think)>(.*?)</(?:thought|think)>", re.IGNORECASE | re.DOTALL
+)
 _JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 
@@ -131,12 +133,18 @@ class MultiModelLLMOrchestrator:
             ]
             if self._openrouter_is_live():
                 routes.append(
-                    ModelRoute(OrchestrationTier.OPENROUTER_BACKUP, "openrouter", s.OPENROUTER_BACKUP_MODEL)
+                    ModelRoute(
+                        OrchestrationTier.OPENROUTER_BACKUP, "openrouter", s.OPENROUTER_BACKUP_MODEL
+                    )
                 )
             return routes
         return [
-            ModelRoute(OrchestrationTier.TIER_1_GEMINI_THINKING, "openrouter", s.OPENROUTER_PRIMARY_MODEL),
-            ModelRoute(OrchestrationTier.TIER_2_LLAMA_70B, "openrouter", s.OPENROUTER_FALLBACK_MODEL),
+            ModelRoute(
+                OrchestrationTier.TIER_1_GEMINI_THINKING, "openrouter", s.OPENROUTER_PRIMARY_MODEL
+            ),
+            ModelRoute(
+                OrchestrationTier.TIER_2_LLAMA_70B, "openrouter", s.OPENROUTER_FALLBACK_MODEL
+            ),
         ]
 
     def _build_chat_model(self, route: ModelRoute, temperature: float = 0.1) -> ChatOpenAI:

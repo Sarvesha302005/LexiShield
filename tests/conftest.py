@@ -3,6 +3,7 @@ Pytest configuration, shared fixtures, mock generators, and sample dispute paylo
 """
 
 import base64
+import contextlib
 import datetime
 import os
 from collections.abc import AsyncGenerator
@@ -39,10 +40,8 @@ def setup_test_database():
         shutil.copyfile(prod_db, test_db)
     yield
     if os.path.exists(test_db):
-        try:
+        with contextlib.suppress(Exception):
             os.remove(test_db)
-        except Exception:
-            pass
 
 
 @pytest.fixture(autouse=True)
