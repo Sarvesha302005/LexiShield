@@ -10,6 +10,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from src.core.config import get_sqlite_db_path
+
 router = APIRouter(prefix="/orders", tags=["Orders & Zapier Telemetry"])
 
 
@@ -23,7 +25,7 @@ async def list_orders(
     carrier: str | None = Query(None, description="Filter by carrier name (UPS, FedEx, USPS, DHL)"),
 ) -> list[dict[str, Any]]:
     try:
-        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        conn = sqlite3.connect(get_sqlite_db_path(), timeout=5.0)
         c = conn.cursor()
         query = """
             SELECT order_id, transaction_id, customer_id, customer_name, customer_email,
@@ -92,7 +94,7 @@ async def list_orders(
 )
 async def get_order(order_id: str) -> dict[str, Any]:
     try:
-        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        conn = sqlite3.connect(get_sqlite_db_path(), timeout=5.0)
         c = conn.cursor()
         row = c.execute(
             """

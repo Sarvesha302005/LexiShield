@@ -137,7 +137,7 @@ async def general_domain_exception_handler(request: Request, exc: PayPalDisputeE
 
 
 # Health check & Root
-@app.get("/health", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
 async def health_check() -> dict[str, str]:
     """Liveness & readiness probe."""
     return {
@@ -158,10 +158,10 @@ if os.path.exists(ASSETS_DIR):
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 
-@app.get("/", tags=["System"])
-@app.get("/login", tags=["System"])
-@app.get("/auth", tags=["System"])
-@app.get("/dashboard", tags=["System"])
+@app.api_route("/", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route("/login", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route("/auth", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route("/dashboard", methods=["GET", "HEAD"], tags=["System"])
 async def root(request: Request):
     """
     Root Web Entrypoint:

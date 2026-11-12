@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from src.core.config import get_sqlite_db_path
 from src.core.exceptions import DisputeNotFoundError
 from src.models.schemas import (
     BuyerInfo,
@@ -240,7 +241,7 @@ async def simulate_dispute(
     # 1. Query SQLite for order details safely
     row = None
     try:
-        conn = sqlite3.connect("lexishield.db", timeout=5.0)
+        conn = sqlite3.connect(get_sqlite_db_path(), timeout=5.0)
         c = conn.cursor()
         if req.order_id:
             row = c.execute(

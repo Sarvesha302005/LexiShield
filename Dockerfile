@@ -36,8 +36,8 @@ COPY --chown=appuser:appgroup src/ /app/src/
 COPY --chown=appuser:appgroup pyproject.toml /app/pyproject.toml
 COPY --chown=appuser:appgroup README.md /app/README.md
 
-# Create artifacts directory with appropriate permissions
-RUN mkdir -p /app/artifacts/dossiers && chown -R appuser:appgroup /app/artifacts
+# Create artifacts directory with appropriate permissions and ensure appuser owns /app
+RUN mkdir -p /app/artifacts/dossiers && chown -R appuser:appgroup /app
 
 USER appuser
 
