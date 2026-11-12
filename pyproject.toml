@@ -37,6 +37,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.6.0",
     "mypy>=1.11.0",
+    "bandit>=1.7.0",
 ]
 
 [tool.pytest.ini_options]
@@ -51,3 +52,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008", "BLE001", "E501"]
+
+[tool.bandit]
+skips = ["B104", "B105", "B303"]

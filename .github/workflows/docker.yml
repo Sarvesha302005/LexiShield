@@ -5,22 +5,10 @@ on:
     branches:
       - main
       - develop
-    paths:
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'src/**'
-      - 'pyproject.toml'
-      - '.github/workflows/docker.yml'
   pull_request:
     branches:
       - main
       - develop
-    paths:
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'src/**'
-      - 'pyproject.toml'
-      - '.github/workflows/docker.yml'
   workflow_dispatch:
 
 permissions:

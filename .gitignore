@@ -51,6 +51,7 @@ venv.bak/
 .coverage.*
 htmlcov/
 coverage.xml
+*.xml
 *.cover
 .hypothesis/
 .ruff_cache/
