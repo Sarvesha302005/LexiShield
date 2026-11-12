@@ -90,7 +90,7 @@ CANONICAL_DEMO_SPECS: dict[str, dict[str, Any]] = {
         "buyer_email": "liam.smith@example.com",
         "amount": 35.00,
         "currency": "USD",
-        "reason": DisputeReason.CREDIT_NOT_PROCESSED,
+        "reason": DisputeReason.INCORRECT_AMOUNT,
         "stage": DisputeStage.CLAIM,
     },
     "PP-D-66305": {
