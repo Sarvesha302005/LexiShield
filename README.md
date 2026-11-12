@@ -6,8 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![AG Grid](https://img.shields.io/badge/AG%20Grid-Enterprise%20Workstation-007ACC.svg)](https://www.ag-grid.com/)
 [![Postman](https://img.shields.io/badge/Postman-Verified%20Collection-FF6C37.svg)](https://www.postman.com/)
-[![Render](https://img.shields.io/badge/Render-FastAPI%20Backend-46E3B7.svg?logo=render)](https://render.com/)
-[![Vercel](https://img.shields.io/badge/Vercel-Edge%20Frontend-black.svg?logo=vercel)](https://vercel.com/)
+[![Render](https://img.shields.io/badge/Render-FastAPI%20Backend-46E3B7.svg?logo=render)](https://lexishield-backend-4zxe.onrender.com/docs)
+[![Vercel](https://img.shields.io/badge/Vercel-Edge%20Frontend-black.svg?logo=vercel)](https://lexi-shield.vercel.app)
 [![CI Pipeline](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml)
 [![CodeQL Security](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml)
 [![Docker Build](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml)
@@ -357,85 +357,15 @@ LexiShield uses a decoupled, highly resilient dual-cloud deployment topology eng
 | **Frontend Fallback** | **Render** | `src/static/` (FastAPI `StaticFiles` Mount) | **Failover / Standalone Interface:** The production Docker container pre-bundles compiled static assets. If Vercel is unreachable or in unified-service mode, navigating directly to the Render service URL serves the full React/AG Grid dashboard. |
 | **FastAPI Backend** | **Render** | `src/` (`Dockerfile`, Uvicorn, Python 3.12) | **Core Defense Engine:** Ingests PayPal webhooks, executes X.509 signature checks, runs 3-tier LLM arbitration specialists, compiles PDF dossiers, and powers `/api/v1` REST routes. Configured with automated redeploy hooks on push. |
 
----
+### Live Deployments & Access Endpoints
 
-### Step-by-Step Production Deployment Guide
+| Service / Resource | Provider | Live URL | Description |
+| :--- | :--- | :--- | :--- |
+| **Primary Frontend UI** | **Vercel** | [https://lexi-shield.vercel.app](https://lexi-shield.vercel.app) | Production React 18 + AG Grid dispute workstation running on Vercel Edge CDN |
+| **Backend Core & Swagger Docs** | **Render** | [https://lexishield-backend-4zxe.onrender.com/docs](https://lexishield-backend-4zxe.onrender.com/docs) | Interactive OpenAPI / Swagger documentation and REST API explorer |
+| **Backend Health Check** | **Render** | [https://lexishield-backend-4zxe.onrender.com/health](https://lexishield-backend-4zxe.onrender.com/health) | Live system health and PayPal operational status probe |
+| **Fallback Frontend UI** | **Render** | [https://lexishield-backend-4zxe.onrender.com/](https://lexishield-backend-4zxe.onrender.com/) | Built-in standalone static workstation served directly by the FastAPI container |
 
-#### 1. Backend Deployment on Render (Free Tier)
-
-1. **Create Render Project & Web Service:**
-   * Go to [Render Dashboard](https://dashboard.render.com/) → **Projects** → **New Project** (e.g., `LexiShield`).
-   * Inside the project, click **New +** → **Web Service** and connect repository `Sarvesha302005/LexiShield`.
-2. **Service Configuration:**
-   * **Name:** `lexishield-backend`
-   * **Language / Runtime:** `Docker` (automatically uses root [`Dockerfile`](Dockerfile))
-   * **Branch:** `main`
-   * **Root Directory:** *(leave blank)*
-   * **Instance Type:** `Free` ($0/mo)
-   * **Health Check Path:** `/health`
-   * **Auto-Deploy:** `Yes`
-3. **Environment Variables Configuration:**
-   Add the following variables in the **Environment** tab:
-
-   | Key | Value / Example | Description |
-   | :--- | :--- | :--- |
-   | `PORT` | `8000` | Container listening port |
-   | `ENVIRONMENT` | `production` | Runtime mode |
-   | `LOG_LEVEL` | `INFO` | Structured logging verbosity |
-   | `API_V1_STR` | `/api/v1` | Base API routing prefix |
-   | `PAYPAL_MODE` | `sandbox` | `sandbox` or `live` |
-   | `PAYPAL_CLIENT_ID` | `mock_client_id_...` | PayPal Developer REST App Client ID |
-   | `PAYPAL_CLIENT_SECRET` | `mock_secret_...` | PayPal Developer REST App Secret |
-   | `PAYPAL_WEBHOOK_ID` | `mock_wh_id_...` | Webhook ID obtained from PayPal Developer |
-   | `GEMINI_API_KEY` | `AIzaSy...` | Free API key from Google AI Studio |
-   | `OPENROUTER_API_KEY` | `sk-or-v1-...` | Free API key from OpenRouter |
-   | `OPENROUTER_PRIMARY_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b:free` | 100% free high-reasoning model |
-   | `OPENROUTER_FALLBACK_MODEL` | `nvidia/nemotron-3.5-super-vl:free` | 100% free multimodal fallback |
-
-4. **Automated CI/CD Webhook (Auto-Redeploy on Push):**
-   * Copy the **Deploy Hook** URL from Render Service Settings (`https://api.render.com/deploy/srv-...`).
-   * Go to your GitHub Repo → **Settings** → **Webhooks** → **Add Webhook**.
-   * Set **Payload URL** to the Render Deploy Hook, **Content type** to `application/json`, select **Just the push event**, and click **Add webhook**.
-
----
-
-#### 2. Frontend Deployment on Vercel (Free Hobby Tier)
-
-1. **Import Repository into Vercel:**
-   * Go to [Vercel Dashboard](https://vercel.com/new).
-   * Ensure GitHub scope is set to `Sarvesha302005` (grant access to `LexiShield`).
-   * Click **Import** next to `LexiShield`.
-2. **Configure Build Settings:**
-   * **Framework Preset:** `Vite`
-   * **Root Directory:** Click *Edit* and select **`frontend`**
-   * **Build Command:** `npm run build`
-   * **Output Directory:** `dist`
-3. **Environment Variables:**
-   * Add: `VITE_API_BASE_URL` = `https://<your-render-service>.onrender.com` *(no trailing slash)*
-4. **Deploy:** Click **Deploy**. Vercel will build and serve the React/AG Grid dashboard on its global Edge CDN (e.g. `https://lexishield.vercel.app`).
-
----
-
-#### 3. PayPal Webhook Registration
-
-To feed real-time PayPal chargeback and inquiry events into the engine:
-1. Open [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox).
-2. Select your Sandbox or Live REST App.
-3. Under **Webhooks**, click **Add Webhook**.
-4. **Webhook URL:** `https://<your-render-service>.onrender.com/api/v1/webhooks/paypal`
-5. Select the following event triggers:
-   * `CUSTOMER.DISPUTE.CREATED`
-   * `CUSTOMER.DISPUTE.UPDATED`
-   * `CUSTOMER.DISPUTE.RESOLVED`
-6. Save and copy the assigned **Webhook ID** into Render's `PAYPAL_WEBHOOK_ID` environment variable.
-
----
-
-#### 4. High-Availability & Free Tier Operational Behaviors
-
-* **Render Free Inactivity Sleep:** Render free instances spin down after 15 minutes of inactivity. When a request arrives, spin-up takes ~50 seconds. The Vercel frontend handles this with graceful loading indicators and cached mock fallback states.
-* **Storage & Database State:** On container spin-up, `seed_db_if_empty()` in `src/main.py` automatically initializes and re-seeds SQLite (`lexishield.db`) with 30 realistic Zapier merchant orders and dispute test records. For permanent persistence across sleeps, plug in a free [Neon.tech](https://neon.tech) PostgreSQL connection string via `DATABASE_URL`.
-* **Frontend Failover Direct Route:** If Vercel is ever unavailable or experiencing edge network outages, the Render backend container natively serves the complete compiled SPA from `src/static/` directly at `https://<your-render-service>.onrender.com/`.
 
 
 
