@@ -95,6 +95,8 @@ async def get_dispute(
 ) -> DisputeRecord:
     record = pipeline.get_record(dispute_id)
     if not record:
+        record = await pipeline.ensure_demo_dispute(dispute_id)
+    if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dispute '{dispute_id}' not found in registry.",
@@ -112,6 +114,9 @@ async def download_pdf_dossier(
     pipeline: DisputePipeline = Depends(get_dispute_pipeline),
 ) -> FileResponse:
     record = pipeline.get_record(dispute_id)
+    if not record or not record.pdf_dossier_path or not os.path.exists(record.pdf_dossier_path):
+        record = await pipeline.ensure_demo_dispute(dispute_id)
+
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

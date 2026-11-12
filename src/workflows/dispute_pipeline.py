@@ -5,8 +5,10 @@ Enterprise-grade lifecycle management with multi-tenant isolation, conversationa
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from src.core.config import get_settings
 from src.core.exceptions import DisputeNotFoundError
@@ -14,12 +16,15 @@ from src.core.tenant import TenantManager, get_tenant_manager
 from src.models.arbitration import ArbitrationAction, ArbitrationDecision
 from src.models.schemas import (
     BillingTelemetryInfo,
+    BuyerInfo,
     CarrierTrackingInfo,
     DisputeMessage,
     DisputeReason,
     DisputeRecord,
     DisputeStage,
     DisputeStatsSummary,
+    DisputeStatus,
+    DisputedTransaction,
     HITLOverrideRequest,
     Money,
     OrderCustomerInfo,
@@ -46,6 +51,69 @@ from src.services.visa_ce3 import CE3QualificationResult, VisaCompellingEvidence
 from src.services.warehouse import WarehouseService
 
 logger = logging.getLogger(__name__)
+
+CANONICAL_DEMO_SPECS: dict[str, dict[str, Any]] = {
+    "PP-D-99412": {
+        "order_id": "ORD-ZAP-99412",
+        "txn_id": "TXN-ZAP-99412",
+        "buyer_name": "Elena Rostova",
+        "buyer_email": "elena.rostova@example.com",
+        "amount": 349.00,
+        "currency": "USD",
+        "reason": DisputeReason.MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED,
+        "stage": DisputeStage.CLAIM,
+    },
+    "PP-D-77194": {
+        "order_id": "ORD-ZAP-77194",
+        "txn_id": "TXN-ZAP-77194",
+        "buyer_name": "Samantha Cole",
+        "buyer_email": "samantha.cole@outlook.com",
+        "amount": 299.99,
+        "currency": "USD",
+        "reason": DisputeReason.UNAUTHORISED,
+        "stage": DisputeStage.CLAIM,
+    },
+    "PP-D-55210": {
+        "order_id": "ORD-ZAP-55210",
+        "txn_id": "TXN-ZAP-55210",
+        "buyer_name": "Sophia Chen",
+        "buyer_email": "sophia.chen@enterprise.io",
+        "amount": 79.00,
+        "currency": "USD",
+        "reason": DisputeReason.CANCELED_RECURRING_BILLING,
+        "stage": DisputeStage.INQUIRY,
+    },
+    "PP-D-44102": {
+        "order_id": "ORD-ZAP-44102",
+        "txn_id": "TXN-ZAP-44102",
+        "buyer_name": "Liam Smith",
+        "buyer_email": "liam.smith@example.com",
+        "amount": 35.00,
+        "currency": "USD",
+        "reason": DisputeReason.CREDIT_NOT_PROCESSED,
+        "stage": DisputeStage.CLAIM,
+    },
+    "PP-D-66305": {
+        "order_id": "ORD-ZAP-66305",
+        "txn_id": "TXN-ZAP-66305",
+        "buyer_name": "Jordan Lee",
+        "buyer_email": "jordan.lee@techcorp.io",
+        "amount": 849.00,
+        "currency": "USD",
+        "reason": DisputeReason.MERCHANDISE_OR_SERVICE_NOT_RECEIVED,
+        "stage": DisputeStage.CLAIM,
+    },
+    "PP-D-88201": {
+        "order_id": "ORD-ZAP-10294",
+        "txn_id": "TXN-ZAP-10294",
+        "buyer_name": "Marcus Vance",
+        "buyer_email": "marcus.vance@gmail.com",
+        "amount": 249.99,
+        "currency": "USD",
+        "reason": DisputeReason.MERCHANDISE_OR_SERVICE_NOT_RECEIVED,
+        "stage": DisputeStage.INQUIRY,
+    },
+}
 
 
 class DisputePipeline:
@@ -202,6 +270,8 @@ class DisputePipeline:
                 )
             if rows:
                 logger.info(f"Synchronized {len(rows)} disputes from database.")
+            else:
+                await self.seed_canonical_disputes()
         except Exception as exc:
             logger.warning(f"Dispute database sync notice: {exc}")
 
@@ -304,6 +374,51 @@ class DisputePipeline:
             conn.close()
         except Exception as exc:
             logger.warning(f"Could not persist dispute {record.dispute_id} to database: {exc}")
+
+    async def ensure_demo_dispute(self, dispute_id: str) -> DisputeRecord | None:
+        """Dynamically synthesizes and compiles PDF dossier on-demand for canonical demo disputes."""
+        spec = CANONICAL_DEMO_SPECS.get(dispute_id)
+        if not spec:
+            return None
+
+        async with self.lock:
+            existing = self._dispute_store.get(dispute_id)
+            if existing and existing.pdf_dossier_path and os.path.exists(existing.pdf_dossier_path):
+                return existing
+
+        dispute = PayPalDisputeResource(
+            dispute_id=dispute_id,
+            create_time=datetime.now(UTC).isoformat(),
+            disputed_transactions=[
+                DisputedTransaction(
+                    buyer_transaction_id=spec["txn_id"],
+                    seller_transaction_id=spec["txn_id"],
+                    gross_amount=Money(currency_code=spec["currency"], value=f"{spec['amount']:.2f}"),
+                    invoice_number=spec["order_id"],
+                    custom=spec["order_id"],
+                    buyer=BuyerInfo(name=spec["buyer_name"], email=spec["buyer_email"]),
+                )
+            ],
+            dispute_amount=Money(currency_code=spec["currency"], value=f"{spec['amount']:.2f}"),
+            dispute_stage=spec["stage"],
+            dispute_reason=spec["reason"],
+            status=DisputeStatus.WAITING_FOR_SELLER_RESPONSE,
+        )
+
+        return await self.execute_dispute_resolution(
+            dispute=dispute,
+            correlation_id=f"CORR-CANONICAL-{dispute_id}",
+            merchant_id="default-merchant",
+        )
+
+    async def seed_canonical_disputes(self) -> None:
+        """Seed all canonical demo disputes on startup so the UI, radar, and dossiers are active immediately."""
+        logger.info("Seeding canonical demo disputes into pipeline registry...")
+        for dispute_id in CANONICAL_DEMO_SPECS:
+            try:
+                await self.ensure_demo_dispute(dispute_id)
+            except Exception as exc:
+                logger.warning(f"Could not seed canonical dispute {dispute_id}: {exc}")
 
     def get_record(self, dispute_id: str) -> DisputeRecord | None:
         """Retrieve stored dispute record."""
