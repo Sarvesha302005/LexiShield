@@ -4,6 +4,7 @@ import HomePage from './components/HomePage';
 import AuthPage from './components/AuthPage';
 import DashboardPage from './components/DashboardPage';
 import DashboardHeader from './components/DashboardHeader';
+import { apiUrl } from './utils/api';
 import { mapApiDispute, sendDisputeMessage, simulateBuyerMessage } from './utils/disputes';
 import { 
   INITIAL_DISPUTES, 
@@ -38,7 +39,7 @@ export default function App() {
   useEffect(() => {
     async function fetchBackendData() {
       try {
-        const res = await fetch('/api/v1/disputes');
+        const res = await fetch(apiUrl('/api/v1/disputes'));
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {

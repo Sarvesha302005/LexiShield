@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, AlertCircle, Bot, Zap, CheckCircle2 } from 'lucide-react';
+import { apiUrl } from '../utils/api';
 import { mapApiDispute } from '../utils/disputes';
 
 export default function SimulateDisputeModal({ onClose, onSimulate }) {
@@ -49,7 +50,7 @@ export default function SimulateDisputeModal({ onClose, onSimulate }) {
       : 'MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED';
 
     try {
-      const resp = await fetch('/api/v1/disputes/simulate', {
+      const resp = await fetch(apiUrl('/api/v1/disputes/simulate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
