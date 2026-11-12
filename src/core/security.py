@@ -140,6 +140,11 @@ async def verify_paypal_webhook_signature(
     transmission_sig = normalized.get("PAYPAL-TRANSMISSION-SIG")
     transmission_time = normalized.get("PAYPAL-TRANSMISSION-TIME")
 
+    # Allow mock bypass in testing / dev if strict verification is disabled
+    if not settings.STRICT_WEBHOOK_VERIFICATION:
+        logger.info("Bypassing webhook signature check (STRICT_WEBHOOK_VERIFICATION=false).")
+        return True
+
     missing = [
         name
         for name, val in [
@@ -156,11 +161,6 @@ async def verify_paypal_webhook_signature(
         raise WebhookVerificationError(
             f"Missing required PayPal webhook headers: {', '.join(missing)}"
         )
-
-    # Allow mock bypass in testing / dev if strict verification is disabled
-    if not settings.STRICT_WEBHOOK_VERIFICATION:
-        logger.info("Bypassing webhook signature check for TEST_MOCK_SIGNATURE.")
-        return True
 
     # Validate certificate and retrieve public key
     cert = await get_certificate(cert_url=cert_url, client=client)  # type: ignore[arg-type]
