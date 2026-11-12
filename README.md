@@ -6,7 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![AG Grid](https://img.shields.io/badge/AG%20Grid-Enterprise%20Workstation-007ACC.svg)](https://www.ag-grid.com/)
 [![Postman](https://img.shields.io/badge/Postman-Verified%20Collection-FF6C37.svg)](https://www.postman.com/)
-[![Render](https://img.shields.io/badge/Render-Blueprint%20IaC-46E3B7.svg)](https://render.com/)
+[![Render](https://img.shields.io/badge/Render-FastAPI%20Backend-46E3B7.svg?logo=render)](https://render.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Edge%20Frontend-black.svg?logo=vercel)](https://vercel.com/)
 [![CI Pipeline](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/ci.yml)
 [![CodeQL Security](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/security-scan.yml)
 [![Docker Build](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml/badge.svg)](https://github.com/Sarvesha302005/LexiShield/actions/workflows/docker.yml)
@@ -314,4 +315,46 @@ To ensure production polish, developer convenience, and institutional-grade reli
   - Docker container web service runtime with Python 3.12+ and FastAPI.
   - Persistent disk volume mount (`/app/artifacts`) for generated PDF rebuttal dossiers.
   - Health check path configured to `/health` with automated branch deployment on push to `main`.
+
+---
+
+## 8. Cloud Deployment Topology (Vercel + Render)
+
+LexiShield uses a decoupled, highly resilient dual-cloud deployment topology engineered for speed, high availability, and zero-cost operation on free tiers:
+
+```
+                      ┌───────────────────────────────────────────────┐
+                      │              Global Web Clients               │
+                      └───────┬───────────────────────────────┬───────┘
+                              │                               │
+                Primary UI    │                               │ Fallback UI
+              (Edge Route)    ▼                               ▼ (Direct Host)
+        ┌──────────────────────────────┐            ┌───────────────────────────────────┐
+        │       VERCEL (FRONTEND)      │            │       RENDER (FALLBACK UI)        │
+        │ • React 18 / Vite / Tailwind │            │ • FastAPI Static Asset Mount      │
+        │ • Global Edge CDN (Hobby)    │            │ • Serves src/static at root (/)   │
+        │ • Root: frontend/            │            │ • High-availability UI backup     │
+        └──────────────┬───────────────┘            └─────────────────┬─────────────────┘
+                       │                                              │
+                       │ API Calls (VITE_API_BASE_URL)                │ Direct Same-Origin
+                       ▼                                              ▼
+        ┌───────────────────────────────────────────────────────────────────────────────┐
+        │                         RENDER (FASTAPI CORE BACKEND)                         │
+        │ • Multi-stage Docker Runtime (Python 3.12+ & Uvicorn)                         │
+        │ • 3-Tier MultiModelLLMOrchestrator (Gemini 2.0 / Nemotron / Llama 70B)       │
+        │ • ReportLab Evidentiary PDF Rebuttal Compiler with SHA-256 Digest             │
+        │ • PayPal REST Disputes & Cryptographic Webhook Intake (/api/v1/webhooks)      │
+        │ • SQLite / PostgreSQL Async Database Engine with Automatic Seed Data          │
+        │ • Webhook Deploy Hook for Automated CI/CD on git push                         │
+        └───────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Infrastructure Component Matrix
+
+| Layer | Host Platform | Source Path / Technology | Responsibilities & Failover |
+| :--- | :--- | :--- | :--- |
+| **Frontend** | **Vercel** | `frontend/` (Vite, React 18, Tailwind, Lucide) | **Primary User Interface:** Hosted across Vercel's global Edge CDN for instantaneous page loads. Connects to the backend via `VITE_API_BASE_URL` with client-side failover routing. |
+| **Frontend Fallback** | **Render** | `src/static/` (FastAPI `StaticFiles` Mount) | **Failover / Standalone Interface:** The production Docker container pre-bundles compiled static assets. If Vercel is unreachable or in unified-service mode, navigating directly to the Render service URL serves the full React/AG Grid dashboard. |
+| **FastAPI Backend** | **Render** | `src/` (`Dockerfile`, Uvicorn, Python 3.12) | **Core Defense Engine:** Ingests PayPal webhooks, executes X.509 signature checks, runs 3-tier LLM arbitration specialists, compiles PDF dossiers, and powers `/api/v1` REST routes. Configured with automated redeploy hooks on push. |
+
 
