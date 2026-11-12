@@ -38,10 +38,11 @@ class PayPalClient:
         if self._access_token and now < self._token_expires_at - 60:
             return self._access_token
 
-        # Mock token for test environments
+        # Mock token when mock credentials are provided, or in test/development environments
         if (
-            self.settings.ENVIRONMENT in ("test", "development")
-            and "mock" in self.settings.PAYPAL_CLIENT_ID.lower()
+            "mock" in self.settings.PAYPAL_CLIENT_ID.lower()
+            or "mock" in self.settings.PAYPAL_CLIENT_SECRET.lower()
+            or self.settings.ENVIRONMENT in ("test", "development")
         ):
             self._access_token = "mock_access_token_bearer_12345"
             self._token_expires_at = now + 3600
