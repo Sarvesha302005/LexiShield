@@ -28,6 +28,34 @@
 
 ---
 
+## 💡 How PayPal & AI Power LexiShield
+
+### 🔹 How We Use PayPal
+* **PayPal Disputes REST API**: Direct programmatic integration with PayPal’s dispute resolution endpoints:
+  - `POST /v1/customer/disputes/{id}/provide-evidence` — Submits synthesized evidentiary PDF dossiers, carrier tracking telemetry, and proof of delivery.
+  - `POST /v1/customer/disputes/{id}/accept-claim` — Concedes unwinnable or sub-threshold disputes to eliminate costly non-refundable dispute fees ($15–$30).
+  - `POST /v1/customer/disputes/{id}/make-offer` — Issues automated pre-arbitration offers (e.g. 50% courtesy refund or replacement) during buyer negotiation.
+  - `POST /v1/customer/disputes/{id}/send-message` — Engages buyers directly inside the PayPal Resolution Center using stage-aware AI personas.
+* **PayPal Webhooks Engine**: Real-time, asynchronous ingestion of `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`, and `CUSTOMER.DISPUTE.RESOLVED` events.
+* **Cryptographic X.509 Verification**: Verifies asymmetric RSA signatures on inbound webhooks against PayPal-issued certificates, with strict SSRF protection and cert URL whitelisting (`*.paypal.com`).
+* **PayPal Seller Protection Compliance Engine**: Enforces PayPal User Agreement §11 safe harbor rules, including the **$750+ signature confirmation mandate**, exact AVS address matching, and post-dispatch carrier redirection detection.
+
+### 🔹 How We Use AI (Autonomous Agentic Architecture)
+* **3-Tier MultiModel LLM Orchestration**:
+  - **Tier 1 (High Reasoning)**: NVIDIA NIM (`nemotron-3.5-super-vl-120b`) & Google Gemini Thinking models analyze complex multi-factor disputes, examine logistics telemetry, and draft legally robust rebuttal dossiers.
+  - **Tier 2 (High Throughput / Fallback)**: NVIDIA `nemotron-3.5-lightning-30b` / Llama 70B powers real-time conversational dispute negotiation and rapid buyer chat.
+  - **Tier 3 (Deterministic Heuristics)**: Offline heuristic rules engine guaranteeing continuous dispute defense even during upstream LLM outages.
+* **Horizontal Domain Specialists**:
+  - `DisputeSupervisor`: Evaluates Expected Value $E[V] = P(win) \times \text{Amount} - (1 - P(win)) \times \text{Fee}$ and enforces a **Seller Rights First** universal defense posture.
+  - `INRAgent`: Item Not Received specialist evaluating courier GPS scans, delivery timestamps, and signature rules.
+  - `SNADAgent`: Significantly Not As Described specialist evaluating warehouse scale weights (0.0% variance) and serial barcodes.
+  - `FraudAgent`: Card-Not-Present fraud specialist executing **Visa Compelling Evidence 3.0 (CE 3.0)** two-factor historical transaction lookups.
+  - `BillingAgent`: Canceled recurring / SaaS billing specialist evaluating clickwrap ToS assent logs and server session timestamps.
+* **Stage-Aware Dynamic Personas**: Shifts dynamically from an empathetic **Customer Diplomat** (during the pre-escalation Inquiry stage) to an assertive **Adversarial Legal Defense** persona (during formal Claim defense).
+* **Automated Evidentiary PDF Synthesis**: Compiles complete court-ready PDF evidence packages via ReportLab, sealing them with immutable **SHA-256 cryptographic digests** stored in the audit trail.
+
+---
+
 ## 1. Enterprise Defense Architecture
 
 LexiShield operates on an event-driven, zero-trust financial architecture engineered to detect, deflect, and defend PayPal disputes autonomously.
@@ -220,6 +248,21 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 ---
 
+### Local Frontend Development (React + Vite)
+
+```bash
+# 1. Navigate to frontend directory
+cd frontend
+
+# 2. Install dependencies
+npm install
+
+# 3. Start Vite dev server (runs at http://localhost:5173)
+npm run dev
+```
+
+---
+
 ## 5. Running the Test Suite
 
 Execute the full suite of **56 tests** with coverage metrics:
@@ -298,17 +341,18 @@ curl -X POST http://localhost:8000/api/v1/rma/generate \
 
 ---
 
-## 7. PayPal AI Hackathon Sponsor Integrations
+## 7. PayPal AI Hackathon Sponsor Integrations & Technologies
 
-To ensure production polish, developer convenience, and institutional-grade reliability, LexiShield natively incorporates three official sponsor technologies:
+To ensure production polish, developer convenience, and institutional-grade reliability, LexiShield natively incorporates official sponsor technologies:
 
-### 1. AG Grid — Enterprise Dispute Workstation & Radar
-* **Role in LexiShield:** Powering the primary **Live Dispute Radar** workstation at `http://localhost:8000/`.
-* **Key Capabilities:**
-  - Fast sorting and multi-column filtering across disputed amounts, win probabilities $P(win)$, and Expected Values $E[V]$.
-  - Custom cell renderers for dynamic status badges (`SELLER PROTECTED`, `VISA CE 3.0`, `HITL REVIEW`), stage pills (`INQUIRY` vs. `CLAIM`), and inline action triggers (`Triage HITL`, `PDF Dossier`, `Inspect`).
-  - Seamless toggle between dense AG Grid workstation view and executive card view.
-  - Native client-side CSV export (`LexiShield_PayPal_Disputes.csv`).
+### 1. Render — Zero-Config Cloud Container Infrastructure (`render.yaml`)
+* **Role in LexiShield:** Powers the live production backend web service (`lexishield-backend`) running Python 3.12, FastAPI, and Uvicorn.
+* **Blueprint:** [`render.yaml`](render.yaml)
+* **Live Deployment:** [https://lexishield-backend-4zxe.onrender.com](https://lexishield-backend-4zxe.onrender.com) | [Swagger Explorer](https://lexishield-backend-4zxe.onrender.com/docs)
+* **Configuration:**
+  - Multi-stage Docker container build with isolated non-root `appuser`.
+  - Health check path configured to `/health` with automated branch deployment on push to `main`.
+  - Built-in dual failover: container natively serves the pre-bundled static React dashboard from `src/static/` if edge routing fails.
 
 ### 2. Postman — Verified Evaluation & Test Suite
 * **Role in LexiShield:** Providing judges and developers with zero-friction, one-click API testing without manual curl setup.
@@ -319,13 +363,26 @@ To ensure production polish, developer convenience, and institutional-grade reli
   - Automated test assertions (`pm.test`) verifying 200 OK statuses, JSON schemas, and response headers (`X-Correlation-Id`).
   - Endpoints covering PayPal webhook intake, dispute lifecycle queries, HITL review overrides, Ethoca/Verifi alert deflection, and multi-tenant BYOK configuration.
 
-### 3. Render — Zero-Config Cloud Infrastructure (`render.yaml`)
-* **Role in LexiShield:** Infrastructure-as-Code blueprint for instant deployment to Render Cloud.
-* **Blueprint:** [`render.yaml`](render.yaml)
-* **Configuration:**
-  - Docker container web service runtime with Python 3.12+ and FastAPI.
-  - Persistent disk volume mount (`/app/artifacts`) for generated PDF rebuttal dossiers.
-  - Health check path configured to `/health` with automated branch deployment on push to `main`.
+### 3. APIMatic — OpenAPI 3.1 Validation & Multi-Language SDK Generation
+* **Role in LexiShield:** Providing an OpenAPI 3.1 contract ready for instant SDK generation and interactive API portal deployment.
+* **Live Specification:** [https://lexishield-backend-4zxe.onrender.com/openapi.json](https://lexishield-backend-4zxe.onrender.com/openapi.json)
+* **Capabilities:**
+  - Strictly typed OpenAPI 3.1 definition generated directly from Pydantic v2 schemas and FastAPI route metadata.
+  - 100% compatible with APIMatic CodeGen engine to instantly export developer SDKs in TypeScript, Python, C#, PHP, and Java.
+  - Validated API schemas for error envelopes, PayPal webhook event models, and arbitration telemetry payloads.
+
+### 4. AG Grid — Enterprise Dispute Workstation & Radar
+* **Role in LexiShield:** Powering the primary **Live Dispute Radar** workstation at `http://localhost:8000/` and on the live dashboard.
+* **Key Capabilities:**
+  - Fast sorting and multi-column filtering across disputed amounts, win probabilities $P(win)$, and Expected Values $E[V]$.
+  - Custom cell renderers for dynamic status badges (`SELLER PROTECTED`, `VISA CE 3.0`, `HITL REVIEW`), stage pills (`INQUIRY` vs. `CLAIM`), and inline action triggers (`Triage HITL`, `PDF Dossier`, `Inspect`).
+  - Seamless toggle between dense AG Grid workstation view and executive card view.
+  - Native client-side CSV export (`LexiShield_PayPal_Disputes.csv`).
+
+### 5. Vercel — Global Edge Frontend Hosting
+* **Role in LexiShield:** Hosting the production React 18 + Tailwind user interface on Vercel's Edge CDN.
+* **Live Deployment:** [https://lexi-shield.vercel.app](https://lexi-shield.vercel.app)
+* **Capabilities:** Global CDN edge caching, sub-second TTFB, and automatic failover connection to the Render backend.
 
 ---
 
