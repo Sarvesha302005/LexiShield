@@ -7,16 +7,19 @@ services:
     name: lexishield-paypal-defense-engine
     runtime: docker
     dockerfilePath: Dockerfile
-    plan: starter
+    plan: free
     region: oregon
     branch: main
     healthCheckPath: /health
     autoDeploy: true
 
-    disk:
-      name: dossier-artifacts
-      mountPath: /app/artifacts
-      sizeGB: 10
+    # Note: Persistent disk requires Render Starter plan ($7/mo + $0.25/GB).
+    # For Render 100% Free Tier, disk is omitted; dossiers and SQLite live in container filesystem
+    # and automatically re-seed on spin-up.
+    # disk:
+    #   name: dossier-artifacts
+    #   mountPath: /app/artifacts
+    #   sizeGB: 10
 
     envVars:
       - key: PORT
