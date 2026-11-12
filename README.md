@@ -17,6 +17,17 @@
 
 ---
 
+### 🌐 Live Production Deployments & Access Endpoints
+
+| Service / Resource | Platform | Live URL | Description |
+| :--- | :--- | :--- | :--- |
+| **Primary Frontend UI** | ![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white) | [**https://lexi-shield.vercel.app**](https://lexi-shield.vercel.app) | Production React 18 + AG Grid dispute workstation running on Vercel Edge CDN |
+| **Backend Core & Swagger Docs** | ![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white) | [**https://lexishield-backend-4zxe.onrender.com/docs**](https://lexishield-backend-4zxe.onrender.com/docs) | Interactive OpenAPI / Swagger documentation and REST API explorer |
+| **Backend Health Check** | ![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white) | [**https://lexishield-backend-4zxe.onrender.com/health**](https://lexishield-backend-4zxe.onrender.com/health) | Live system health and PayPal operational status probe |
+| **Fallback Frontend UI** | ![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white) | [**https://lexishield-backend-4zxe.onrender.com/**](https://lexishield-backend-4zxe.onrender.com/) | Built-in standalone static workstation served directly by the FastAPI container |
+
+---
+
 ## 1. Enterprise Defense Architecture
 
 LexiShield operates on an event-driven, zero-trust financial architecture engineered to detect, deflect, and defend PayPal disputes autonomously.
