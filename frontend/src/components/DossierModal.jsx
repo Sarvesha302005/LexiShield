@@ -1,4 +1,5 @@
 import React from 'react';
+import { apiUrl } from '../utils/api';
 import { 
   X, 
   FileText, 
@@ -192,7 +193,7 @@ export default function DossierModal({ dispute, onClose }) {
 
           <div className="flex items-center gap-3">
             <a
-              href={`/api/v1/disputes/${dispute.dispute_id}/pdf`}
+              href={apiUrl(`/api/v1/disputes/${dispute.dispute_id}/pdf`)}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md"

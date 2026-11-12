@@ -3,6 +3,8 @@
  * turns status/reason codes into plain-English labels, and applies review decisions.
  */
 
+import { apiUrl } from './api';
+
 // "jordan.lee@techcorp.io" -> "Jordan Lee", for records that carry an email but no customer name.
 const nameFromEmail = (email) =>
   email
@@ -139,7 +141,7 @@ export async function submitReviewDecision(dispute, action, reviewerId) {
   if (!dispute.is_live) {
     return { pipeline_status: REVIEW_ACTIONS[action].status, action_taken: `HUMAN_OVERRIDE_${action}` };
   }
-  const res = await fetch(`/api/v1/disputes/${encodeURIComponent(dispute.dispute_id)}/hitl/override`, {
+  const res = await fetch(apiUrl(`/api/v1/disputes/${encodeURIComponent(dispute.dispute_id)}/hitl/override`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -190,7 +192,7 @@ async function postJson(url, body) {
   return res.json();
 }
 
-const disputeUrl = (id) => `/api/v1/disputes/${encodeURIComponent(id)}`;
+const disputeUrl = (id) => apiUrl(`/api/v1/disputes/${encodeURIComponent(id)}`);
 
 // Sends a merchant message to the buyer through PayPal; returns the dispute's updated message list.
 export async function sendDisputeMessage(disputeId, text) {
