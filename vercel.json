@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://lexishield-pdf0.onrender.com/api/:path*"
+      "destination": "https://lexishield-backend-4zxe.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",

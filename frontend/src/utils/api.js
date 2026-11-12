@@ -1,7 +1,7 @@
 const configuredBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const isVercelHost =
   typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
-const DEFAULT_RENDER_BACKEND = 'https://lexishield-pdf0.onrender.com';
+const DEFAULT_RENDER_BACKEND = 'https://lexishield-backend-4zxe.onrender.com';
 
 export const API_BASE_URL =
   configuredBase || (isVercelHost ? DEFAULT_RENDER_BACKEND : '');
